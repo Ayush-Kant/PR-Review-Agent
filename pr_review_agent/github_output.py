@@ -266,10 +266,17 @@ class GitHubReviewPublisher:
         connection: sqlite3.Connection,
         truth_store: ReviewTruthStore,
         github_client: GitHubClient,
+        *,
+        secret_scanner: Any | None = None,
     ) -> None:
         self.connection = connection
         self.truth_store = truth_store
         self.github_client = github_client
+        if secret_scanner is None:
+            from pr_review_agent.security import SecretLeakageScanner
+            self.secret_scanner = SecretLeakageScanner()
+        else:
+            self.secret_scanner = secret_scanner
         self._create_schema()
 
     def _create_schema(self) -> None:
@@ -455,6 +462,23 @@ class GitHubReviewPublisher:
 
         # 6. Publication execution via GitHub API
         formatted_body = self._format_finding_body(finding, idempotency_key)
+        candidate_comments = [inline_comment] if (can_inline and inline_comment) else ()
+        is_safe, leak_matches = self.secret_scanner.validate_outbound_review_payload(
+            formatted_body,
+            candidate_comments,
+        )
+        if not is_safe:
+            first_m = leak_matches[0]
+            leak_reason = f"Outbound review payload contains detected secret ({first_m.category}) at {first_m.field_name}:{first_m.offset}"
+            return self._record_effect_and_result(
+                status=PublicationStatus.FAILED,
+                idempotency_key=idempotency_key,
+                finding=finding,
+                pull_number=pull_number,
+                reason=leak_reason,
+                now=current_time,
+            )
+
         try:
             # Re-verify live head SHA immediately before call to protect against TOCTOU race
             live_recheck = self.github_client.get_pull_request_head_sha(

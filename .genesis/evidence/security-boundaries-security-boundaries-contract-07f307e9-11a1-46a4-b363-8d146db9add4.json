@@ -1,0 +1,30 @@
+{
+  "task": "security-boundaries",
+  "gate": "security-boundaries-contract",
+  "kind": "command",
+  "attempt": "07f307e9-11a1-46a4-b363-8d146db9add4",
+  "command": "python -m pytest tests/test_security_boundaries.py",
+  "started_at": "2026-09-14T21:19:06.824Z",
+  "observed_at": "2026-09-14T21:19:13.331Z",
+  "exit_code": 4,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 0 items\r\n\r\n============================ no tests ran in 0.01s ============================\r\n",
+  "stderr": "ERROR: file or directory not found: tests/test_security_boundaries.py\r\n\r\n",
+  "failure": "command-failed",
+  "receipt": null,
+  "revision": {
+    "commit": "c7a595aa8092ec3699c185d3f7cd1ca2641a2cd5",
+    "dirty": true
+  },
+  "source_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+  "before_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+  "config_hash": "80bac348ae376fdccb229855ee7350bd195f2481d3e618c7585b2c09fd713e61",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "51d2ac3aa18c4b7d5714fac097a398da44473aba8d2366414013af67ffa7e860"
+}

@@ -58,15 +58,15 @@
 
 ### security-boundaries — Implement prompt-injection defenses, data and secret controls, and least-privilege repository access boundaries.
 
-- state/risk: active / medium
+- state/risk: done / medium
 - requirements: FR-18, AC-02, AC-14, NFR-02, NFR-07
 - scope: not bounded
-- gates: security-boundaries-contract: python -m pytest tests/test_security_boundaries.py, independent-review: pending
+- gates: security-boundaries-contract: python -m pytest tests/test_security_boundaries.py, independent-review: pass
 - next: Run the task pre-flight.
 
 ### cost-budget-controls — Implement run/component cost accounting and configurable budget, concurrency, and context controls.
 
-- state/risk: queued / medium
+- state/risk: active / medium
 - requirements: FR-19, AC-13, NFR-04, NFR-05, NFR-12
 - scope: not bounded
 - gates: cost-controls-contract: python -m pytest tests/test_cost_and_budget_controls.py, independent-review: pending

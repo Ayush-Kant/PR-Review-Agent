@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-14T21:12:50.065Z"
+    "updated_at": "2026-09-14T21:54:20.129Z"
   },
   "policy": {
     "ponytail": "full",
@@ -25,7 +25,7 @@
   "lifecycle": {
     "phase": "build",
     "status": "active",
-    "active_task": "security-boundaries",
+    "active_task": "cost-budget-controls",
     "blocker": null,
     "next_action": "Run the task pre-flight."
   },
@@ -749,7 +749,7 @@
     {
       "id": "security-boundaries",
       "outcome": "Implement prompt-injection defenses, data and secret controls, and least-privilege repository access boundaries.",
-      "state": "active",
+      "state": "done",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -770,16 +770,28 @@
           "kind": "command",
           "command": "python -m pytest tests/test_security_boundaries.py",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/security-boundaries-security-boundaries-contract-0a6830e1-6279-4995-8465-dcc9f8094b42.json",
+            "hash": "75ca1336ba5aa6ccb3e1430f44fe537aaa587ca236b11d5c6fe1db5fe7a615d1",
+            "source_hash": "f38b8238be288a02ed51ec478ee8d5e8ff8497f7abb07f381dd1c3311cfcdad1",
+            "config_hash": "80bac348ae376fdccb229855ee7350bd195f2481d3e618c7585b2c09fd713e61",
+            "observed_at": "2026-09-14T21:48:11.768Z"
+          }
         },
         {
           "id": "independent-review",
           "kind": "review",
           "command": "",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/security-boundaries-independent-review-d619f3b9-298d-4472-b8c1-3510e100e2b6.json",
+            "hash": "536b6975b8c0f9d3208479a671b42066785245fa4d1068d6225a47c644ae5f52",
+            "source_hash": "f38b8238be288a02ed51ec478ee8d5e8ff8497f7abb07f381dd1c3311cfcdad1",
+            "config_hash": "80bac348ae376fdccb229855ee7350bd195f2481d3e618c7585b2c09fd713e61",
+            "observed_at": "2026-09-14T21:51:58.820Z"
+          }
         }
       ],
       "next_action": "Run the task pre-flight.",
@@ -788,7 +800,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:05.203Z",
-      "updated_at": "2026-09-14T15:30:05.204Z",
+      "updated_at": "2026-09-14T21:54:04.332Z",
       "base_manifest": {
         ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
         "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
@@ -811,7 +823,7 @@
     {
       "id": "cost-budget-controls",
       "outcome": "Implement run/component cost accounting and configurable budget, concurrency, and context controls.",
-      "state": "queued",
+      "state": "active",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -850,7 +862,27 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:06.170Z",
-      "updated_at": "2026-09-14T15:30:06.171Z"
+      "updated_at": "2026-09-14T15:30:06.171Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/github_output.py": "ef66bd4121b68bb1d44e6ab3ea110746404dd05fb936d00fca957491fc370e60",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/observability.py": "2d70e9af86d73fff8ba8b22e846f03d94ec8f2cea6c856a135d9f06da63bf3ac",
+        "pr_review_agent/orchestration.py": "885f6eecafdfd7a124356ab89b9b9ed487df1fd494fcc745d8823afec264ca5c",
+        "pr_review_agent/policy.py": "bb4773ba51936ec7f760fd83909dfa8b9dac1ae1249bf376ab420e2273c0b645",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "pr_review_agent/security.py": "273fc57ed51b7e7110669c9416211ed1f174c33d959d38053c9196972da05021",
+        "tests/test_audit_observability_dashboard.py": "6b2982f18570ad0ee42cc475a2639ae914d4df80cf7f6bbb76fb74775a75bfdc",
+        "tests/test_finding_policy_and_hitl.py": "ada104191955a41a87c1579603598d8127dd89fdb61ab333e7090f2c0f0c0606",
+        "tests/test_github_review_output.py": "40e2ae39b0edec6da8cbe268b27a626ad8d60336f1d110d547f0bfb948f37b7a",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_security_boundaries.py": "6d029a36a0ddcb46af357f1e14b28a7d40be2296b2cb5a2d385025e9b4282c51",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     },
     {
       "id": "evaluation-learning-drift",
@@ -951,6 +983,15 @@
       "task": "audit-observability-dashboard",
       "human": "Ayush Kant",
       "reason": "Independent review passed: 20/20 focused tests, 80/80 full regression, Genesis executable gate passed, provenance isolation and fail-closed repository lineage verified, append-only audit enforcement verified, and no blocking scope/security/correctness issues found.",
+      "revision": null
+    },
+    {
+      "id": "d619f3b9-298d-4472-b8c1-3510e100e2b6",
+      "at": "2026-09-14T21:51:58.820Z",
+      "action": "approve",
+      "task": "security-boundaries",
+      "human": "Ayush Kant",
+      "reason": "Implementation reviewed after security-boundary refinements. Focused security tests 18/18, full regression 98/98, Genesis executable gate passed, and the tightened prompt-injection, secret-boundary, least-privilege, and tenancy controls are accepted for independent review.",
       "revision": null
     }
   ],
@@ -1434,6 +1475,78 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-14T21:05:40.545Z"
+    },
+    {
+      "id": "07f307e9-11a1-46a4-b363-8d146db9add4",
+      "task": "security-boundaries",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_security_boundaries.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 17048,
+      "child_pid": 7484,
+      "started_at": "2026-09-14T21:19:06.824Z",
+      "status": "failed",
+      "before_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+      "config_hash": "80bac348ae376fdccb229855ee7350bd195f2481d3e618c7585b2c09fd713e61",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": "command-failed",
+      "ended_at": "2026-09-14T21:19:13.331Z"
+    },
+    {
+      "id": "c25b8d73-4b46-4bb4-be02-4aa5ab908973",
+      "task": "security-boundaries",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_security_boundaries.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 22712,
+      "child_pid": 24940,
+      "started_at": "2026-09-14T21:34:51.609Z",
+      "status": "passed",
+      "before_hash": "06c91d2504618258f7dcae779b36f199c3f69db374b68d70872b94684b884aa9",
+      "config_hash": "80bac348ae376fdccb229855ee7350bd195f2481d3e618c7585b2c09fd713e61",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T21:34:56.425Z"
+    },
+    {
+      "id": "0a6830e1-6279-4995-8465-dcc9f8094b42",
+      "task": "security-boundaries",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_security_boundaries.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 23976,
+      "child_pid": 23604,
+      "started_at": "2026-09-14T21:48:02.892Z",
+      "status": "passed",
+      "before_hash": "f38b8238be288a02ed51ec478ee8d5e8ff8497f7abb07f381dd1c3311cfcdad1",
+      "config_hash": "80bac348ae376fdccb229855ee7350bd195f2481d3e618c7585b2c09fd713e61",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T21:48:11.767Z"
     }
   ],
   "authorizations": [],
@@ -1441,13 +1554,13 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-14T21:12:49.709Z",
+    "at": "2026-09-14T21:54:19.656Z",
     "revision": {
-      "commit": "2c2f372164d4186442aa149002ad20e44f37f476",
+      "commit": "c7a595aa8092ec3699c185d3f7cd1ca2641a2cd5",
       "dirty": true,
-      "source_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e"
+      "source_hash": "f38b8238be288a02ed51ec478ee8d5e8ff8497f7abb07f381dd1c3311cfcdad1"
     },
-    "active_task": "security-boundaries",
+    "active_task": "cost-budget-controls",
     "next_action": "Run the task pre-flight."
   },
   "legacy": null

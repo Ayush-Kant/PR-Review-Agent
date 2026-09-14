@@ -8,11 +8,13 @@ digraph genesis {
   "file:pr_review_agent/orchestration.py" [label="pr_review_agent/orchestration.py",class="file"];
   "file:pr_review_agent/policy.py" [label="pr_review_agent/policy.py",class="file"];
   "file:pr_review_agent/retrieval.py" [label="pr_review_agent/retrieval.py",class="file"];
+  "file:pr_review_agent/security.py" [label="pr_review_agent/security.py",class="file"];
   "file:tests/test_audit_observability_dashboard.py" [label="tests/test_audit_observability_dashboard.py",class="file"];
   "file:tests/test_finding_policy_and_hitl.py" [label="tests/test_finding_policy_and_hitl.py",class="file"];
   "file:tests/test_github_review_output.py" [label="tests/test_github_review_output.py",class="file"];
   "file:tests/test_retrieval_and_findings.py" [label="tests/test_retrieval_and_findings.py",class="file"];
   "file:tests/test_review_orchestration.py" [label="tests/test_review_orchestration.py",class="file"];
+  "file:tests/test_security_boundaries.py" [label="tests/test_security_boundaries.py",class="file"];
   "file:tests/test_webhook_intake.py" [label="tests/test_webhook_intake.py",class="file"];
 
 }

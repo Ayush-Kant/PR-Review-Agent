@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "2c2f372164d4186442aa149002ad20e44f37f476",
-  "sourceHash": "d7f15706e70e739b110a82a3915c852254612e9e81555a1ac6911c8268285997",
+  "revision": "c7a595aa8092ec3699c185d3f7cd1ca2641a2cd5",
+  "sourceHash": "936312be553bd1d6de861111bb5d5679999b060e074126c5a038e577d71150aa",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -27,7 +27,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "1da34dae788f105ad438748b41f67737ec2fecdb889850b3c32e652c71b5abe0"
+      "contentHash": "9d50d8077a1b789794792497af369267073ef00023b9463dfdbc69a1aa4de976"
     },
     {
       "id": "file:pr_review_agent/intake.py",
@@ -80,6 +80,16 @@
       "contentHash": "ec4d2bc1314e70313fcee2fd69db1ad9f268cd0e9ea361bb4d01b8785be75f22"
     },
     {
+      "id": "file:pr_review_agent/security.py",
+      "type": "file",
+      "label": "pr_review_agent/security.py",
+      "path": "pr_review_agent/security.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "8d856825662863a1f72b1665d9b79fd82b3620e2d66622062c8072695fe8ad6e"
+    },
+    {
       "id": "file:tests/test_audit_observability_dashboard.py",
       "type": "file",
       "label": "tests/test_audit_observability_dashboard.py",
@@ -128,6 +138,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "aa8b6ebaf83ba294c9861a3cf101b62c07b63807a2431cd1e0f8995b973e872f"
+    },
+    {
+      "id": "file:tests/test_security_boundaries.py",
+      "type": "file",
+      "label": "tests/test_security_boundaries.py",
+      "path": "tests/test_security_boundaries.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "b0ccb2175768fcb7ce88a2c6ced8c325beb99562d6f5efe23b4ba61362b5d50b"
     },
     {
       "id": "file:tests/test_webhook_intake.py",

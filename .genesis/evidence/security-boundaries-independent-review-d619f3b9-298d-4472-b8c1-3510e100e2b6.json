@@ -1,0 +1,13 @@
+{
+  "task": "security-boundaries",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "d619f3b9-298d-4472-b8c1-3510e100e2b6",
+  "human": "Ayush Kant",
+  "reason": "Implementation reviewed after security-boundary refinements. Focused security tests 18/18, full regression 98/98, Genesis executable gate passed, and the tightened prompt-injection, secret-boundary, least-privilege, and tenancy controls are accepted for independent review.",
+  "observed_at": "2026-09-14T21:51:58.820Z",
+  "source_hash": "f38b8238be288a02ed51ec478ee8d5e8ff8497f7abb07f381dd1c3311cfcdad1",
+  "config_hash": "80bac348ae376fdccb229855ee7350bd195f2481d3e618c7585b2c09fd713e61",
+  "reviewed_proofs": "6a29895b139b7688627a6c8a5ac5b93a0ede0a47879a4c8737afb11652d5f024",
+  "hash": "536b6975b8c0f9d3208479a671b42066785245fa4d1068d6225a47c644ae5f52"
+}
