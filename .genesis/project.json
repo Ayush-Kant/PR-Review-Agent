@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-14T22:31:41.409Z"
+    "updated_at": "2026-09-14T22:56:55.277Z"
   },
   "policy": {
     "ponytail": "full",
@@ -23,11 +23,11 @@
     }
   },
   "lifecycle": {
-    "phase": "build",
-    "status": "active",
-    "active_task": "evaluation-learning-drift",
+    "phase": "verify",
+    "status": "ready",
+    "active_task": null,
     "blocker": null,
-    "next_action": "Run the task pre-flight."
+    "next_action": "Review completed work and choose the next bounded outcome."
   },
   "commands": {},
   "workflow": {
@@ -899,7 +899,7 @@
     {
       "id": "evaluation-learning-drift",
       "outcome": "Implement golden-PR evaluation, regression promotion gates, feedback capture, drift detection, and rollback controls.",
-      "state": "active",
+      "state": "done",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -919,16 +919,28 @@
           "kind": "command",
           "command": "python -m pytest tests/test_evaluation_learning_drift.py",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/evaluation-learning-drift-evaluation-contract-548c3369-7166-43b3-b5bb-d0731c8efc2b.json",
+            "hash": "11d8bc4ee5563fb2f501bfc4bf8f2b23e36edfe91ce8e3b6a9cc9b379f7c7c2a",
+            "source_hash": "d3f17e4e807ba6a4c9ceb6fe56d4438e2586b38d5c90c25908e1316f437c137a",
+            "config_hash": "5473fd98af633d07d47e79d7bfacab4e8edb59ec6fdc2385e444680be64e33d7",
+            "observed_at": "2026-09-14T22:51:45.622Z"
+          }
         },
         {
           "id": "independent-review",
           "kind": "review",
           "command": "",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/evaluation-learning-drift-independent-review-03687823-db09-43cc-a5c2-db13e2c1ce80.json",
+            "hash": "61709344ac3fa9f5f31f72e50da931fc5b7463528e2ac84c75b45cd44131b231",
+            "source_hash": "d3f17e4e807ba6a4c9ceb6fe56d4438e2586b38d5c90c25908e1316f437c137a",
+            "config_hash": "5473fd98af633d07d47e79d7bfacab4e8edb59ec6fdc2385e444680be64e33d7",
+            "observed_at": "2026-09-14T22:55:12.712Z"
+          }
         }
       ],
       "next_action": "Run the task pre-flight.",
@@ -937,7 +949,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:07.084Z",
-      "updated_at": "2026-09-14T15:30:07.123Z",
+      "updated_at": "2026-09-14T22:56:50.105Z",
       "base_manifest": {
         ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
         "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
@@ -1035,6 +1047,15 @@
       "task": "cost-budget-controls",
       "human": "Ayush Kant",
       "reason": "Implementation reviewed after runtime concurrency wiring and incomplete-cost fail-closed refinements. Focused cost/budget tests pass, full regression passes, Genesis executable gate passes, no invented numeric defaults, provider pricing remains configurable, and unknown usage is never treated as zero for hard-budget decisions.",
+      "revision": null
+    },
+    {
+      "id": "03687823-db09-43cc-a5c2-db13e2c1ce80",
+      "at": "2026-09-14T22:55:12.712Z",
+      "action": "approve",
+      "task": "evaluation-learning-drift",
+      "human": "Ayush Kant",
+      "reason": "Independent review requested after targeted fixes for model-behavior drift coverage, rollback validation, durable active policy recovery, expanded secret scanning, and removal of the unused baseline_metrics interface. Focused and full regression tests pass and the executable Genesis gate passes.",
       "revision": null
     }
   ],
@@ -1662,6 +1683,54 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-14T22:30:05.392Z"
+    },
+    {
+      "id": "bbe30d8b-2753-478e-b7d4-476baaa3bd58",
+      "task": "evaluation-learning-drift",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_evaluation_learning_drift.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 15768,
+      "child_pid": 24840,
+      "started_at": "2026-09-14T22:42:19.839Z",
+      "status": "passed",
+      "before_hash": "d18c1d73667f137477a4699dc1b6c2d76f3ef4c1ce0ebfbdfba16f067ed91bac",
+      "config_hash": "5473fd98af633d07d47e79d7bfacab4e8edb59ec6fdc2385e444680be64e33d7",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T22:42:26.119Z"
+    },
+    {
+      "id": "548c3369-7166-43b3-b5bb-d0731c8efc2b",
+      "task": "evaluation-learning-drift",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_evaluation_learning_drift.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 21980,
+      "child_pid": 25592,
+      "started_at": "2026-09-14T22:51:39.263Z",
+      "status": "passed",
+      "before_hash": "d3f17e4e807ba6a4c9ceb6fe56d4438e2586b38d5c90c25908e1316f437c137a",
+      "config_hash": "5473fd98af633d07d47e79d7bfacab4e8edb59ec6fdc2385e444680be64e33d7",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T22:51:45.622Z"
     }
   ],
   "authorizations": [],
@@ -1669,14 +1738,14 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-14T22:31:41.080Z",
+    "at": "2026-09-14T22:56:55.078Z",
     "revision": {
-      "commit": "df28ee5bbe989e010c1ce0f78bb378478db570e7",
+      "commit": "b1797cebe0e367bd17041346f9bd22b422613ff9",
       "dirty": true,
-      "source_hash": "795c2e5d533f1320b9c88363013963af1b003da90177a80138b58e73b17f03ff"
+      "source_hash": "d3f17e4e807ba6a4c9ceb6fe56d4438e2586b38d5c90c25908e1316f437c137a"
     },
-    "active_task": "evaluation-learning-drift",
-    "next_action": "Run the task pre-flight."
+    "active_task": null,
+    "next_action": "Review completed work and choose the next bounded outcome."
   },
   "legacy": null
 }

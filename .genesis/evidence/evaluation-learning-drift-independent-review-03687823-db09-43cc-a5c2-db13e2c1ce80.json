@@ -1,0 +1,13 @@
+{
+  "task": "evaluation-learning-drift",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "03687823-db09-43cc-a5c2-db13e2c1ce80",
+  "human": "Ayush Kant",
+  "reason": "Independent review requested after targeted fixes for model-behavior drift coverage, rollback validation, durable active policy recovery, expanded secret scanning, and removal of the unused baseline_metrics interface. Focused and full regression tests pass and the executable Genesis gate passes.",
+  "observed_at": "2026-09-14T22:55:12.712Z",
+  "source_hash": "d3f17e4e807ba6a4c9ceb6fe56d4438e2586b38d5c90c25908e1316f437c137a",
+  "config_hash": "5473fd98af633d07d47e79d7bfacab4e8edb59ec6fdc2385e444680be64e33d7",
+  "reviewed_proofs": "49c0244b07c110bb16d5b349adc4e8d9eb1230c5af17a8e9349bc6d18be5adfc",
+  "hash": "61709344ac3fa9f5f31f72e50da931fc5b7463528e2ac84c75b45cd44131b231"
+}

@@ -1,0 +1,30 @@
+{
+  "task": "evaluation-learning-drift",
+  "gate": "evaluation-contract",
+  "kind": "command",
+  "attempt": "548c3369-7166-43b3-b5bb-d0731c8efc2b",
+  "command": "python -m pytest tests/test_evaluation_learning_drift.py",
+  "started_at": "2026-09-14T22:51:39.263Z",
+  "observed_at": "2026-09-14T22:51:45.622Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 21 items\r\n\r\ntests\\test_evaluation_learning_drift.py .....................            [100%]\r\n\r\n============================= 21 passed in 0.90s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "b1797cebe0e367bd17041346f9bd22b422613ff9",
+    "dirty": true
+  },
+  "source_hash": "d3f17e4e807ba6a4c9ceb6fe56d4438e2586b38d5c90c25908e1316f437c137a",
+  "before_hash": "d3f17e4e807ba6a4c9ceb6fe56d4438e2586b38d5c90c25908e1316f437c137a",
+  "config_hash": "5473fd98af633d07d47e79d7bfacab4e8edb59ec6fdc2385e444680be64e33d7",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "11d8bc4ee5563fb2f501bfc4bf8f2b23e36edfe91ce8e3b6a9cc9b379f7c7c2a"
+}
