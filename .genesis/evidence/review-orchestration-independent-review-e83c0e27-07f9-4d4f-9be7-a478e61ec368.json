@@ -1,0 +1,13 @@
+{
+  "task": "review-orchestration",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "e83c0e27-07f9-4d4f-9be7-a478e61ec368",
+  "human": "Ayush Kant",
+  "reason": "Reviewed the post-correction implementation. The queue leasing race was hardened, restart durability was tested, genuine LangGraph StateGraph orchestration was added, synchronous specialist handlers are offloaded, 11 orchestration tests and 5 intake regression tests pass, and the Genesis executable gate passes.",
+  "observed_at": "2026-09-14T17:08:28.508Z",
+  "source_hash": "9314c271e65e8fdbad0daf9debeec02bdbed69180d442711ba4f9a38545b6297",
+  "config_hash": "18f7ee319952c3edaa792f7f9355107dd574c56ede59cb3cb569a1afb152613e",
+  "reviewed_proofs": "13b6cd73a816efebf40ab8bfd240e60ad1a088f3bd552daf8d7b9d22e0eaf77c",
+  "hash": "5692b5cd689de5f34b4e80a3cea14bb5bccafcc94c12405e9f3468bf9edd68a8"
+}

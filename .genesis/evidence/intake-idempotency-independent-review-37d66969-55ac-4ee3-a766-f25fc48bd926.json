@@ -1,0 +1,13 @@
+{
+  "task": "intake-idempotency",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "37d66969-55ac-4ee3-a766-f25fc48bd926",
+  "human": "Ayush Kant",
+  "reason": "Reviewed and approved the corrected intake-idempotency implementation; all 5 tests and the Genesis executable gate pass.",
+  "observed_at": "2026-09-14T16:12:48.871Z",
+  "source_hash": "f6cc403d06dd3fd29095fd5b8707945eb08c02751a39be9356161ff30e4372fa",
+  "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+  "reviewed_proofs": "731c4184961bfe36141fc54225c6d16d9dc8a6ba22473b03ccd8698946fd2130",
+  "hash": "e3f6094a165094091247ad487b2d042050df271d170d75832e6fd122cffbd355"
+}

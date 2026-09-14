@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 2,
+  "project": "PR-Review-Agent",
+  "revision": "86274b13e4150c6a5cb42ab53f54ff6394f2fa65",
+  "sourceHash": "cf22ca96f02656e834c81160f09209808dca2f99d049e32425e09cbda3fef1c8",
+  "provenance": {
+    "tool": "genesis-graphizer",
+    "method": "static-analysis",
+    "confidenceScale": "0..1"
+  },
+  "nodes": [
+    {
+      "id": "file:pr_review_agent/__init__.py",
+      "type": "file",
+      "label": "pr_review_agent/__init__.py",
+      "path": "pr_review_agent/__init__.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "a650975c324a6795e21cc40682fc7e9ded58950b5f965aec1512690b56fe33a1"
+    },
+    {
+      "id": "file:pr_review_agent/intake.py",
+      "type": "file",
+      "label": "pr_review_agent/intake.py",
+      "path": "pr_review_agent/intake.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "f01d4eb83d92bd16b67f6bbce175b390ea40fb060820e3fd65e78d9594efe8aa"
+    },
+    {
+      "id": "file:pr_review_agent/orchestration.py",
+      "type": "file",
+      "label": "pr_review_agent/orchestration.py",
+      "path": "pr_review_agent/orchestration.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "7f94e5b91e4194f71391886e1b70027a9a8d3999b6f431bef9520a3df4112fbc"
+    },
+    {
+      "id": "file:pr_review_agent/retrieval.py",
+      "type": "file",
+      "label": "pr_review_agent/retrieval.py",
+      "path": "pr_review_agent/retrieval.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "ec4d2bc1314e70313fcee2fd69db1ad9f268cd0e9ea361bb4d01b8785be75f22"
+    },
+    {
+      "id": "file:tests/test_retrieval_and_findings.py",
+      "type": "file",
+      "label": "tests/test_retrieval_and_findings.py",
+      "path": "tests/test_retrieval_and_findings.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "2b891282af1e34a29f3d87f807738862c40041ad9cf71b19dec7178975db30e8"
+    },
+    {
+      "id": "file:tests/test_review_orchestration.py",
+      "type": "file",
+      "label": "tests/test_review_orchestration.py",
+      "path": "tests/test_review_orchestration.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "aa8b6ebaf83ba294c9861a3cf101b62c07b63807a2431cd1e0f8995b973e872f"
+    },
+    {
+      "id": "file:tests/test_webhook_intake.py",
+      "type": "file",
+      "label": "tests/test_webhook_intake.py",
+      "path": "tests/test_webhook_intake.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "751a5c8a45119e739315619e37d893d7883b0598e6268c2c2e097a453e058d12"
+    }
+  ],
+  "edges": [],
+  "warnings": [
+    "Python AST unavailable: Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Apps > Advanced app settings > App execution aliases."
+  ],
+  "stats": {
+    "unresolvedCalls": 0
+  }
+}

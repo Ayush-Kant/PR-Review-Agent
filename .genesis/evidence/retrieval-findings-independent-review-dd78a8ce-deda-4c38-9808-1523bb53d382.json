@@ -1,0 +1,13 @@
+{
+  "task": "retrieval-findings",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "dd78a8ce-deda-4c38-9808-1523bb53d382",
+  "human": "Ayush Kant",
+  "reason": "Reviewed the corrected retrieval-findings implementation. Evidence line ranges are verified, diff file matching is exact, token capping is strict, 14 retrieval tests plus 5 intake and 11 orchestration regression tests pass, and the Genesis executable gate passes.",
+  "observed_at": "2026-09-14T18:07:39.721Z",
+  "source_hash": "5450286ad6b4ca54e6071c58eb55d0dc984744a0dd41d95397581adb04695ea1",
+  "config_hash": "5d48fd04cd86fac653ed48b37ca1bb8c990e5e13f3e064e3030800f7c3576499",
+  "reviewed_proofs": "6d415f41bf71e59d83966ebb75b200fa0eb5187d0781a85b1f47d3f98e5516d7",
+  "hash": "b70625d45bc68ebb2d50a936e09ce14b4c551843c27c33df0260da4d79a9bfc6"
+}

@@ -1,0 +1,30 @@
+{
+  "task": "review-orchestration",
+  "gate": "orchestration-contract",
+  "kind": "command",
+  "attempt": "553f1521-94bf-4ffc-bc87-2e9f0696f51d",
+  "command": "python -m pytest tests/test_review_orchestration.py",
+  "started_at": "2026-09-14T17:02:34.514Z",
+  "observed_at": "2026-09-14T17:02:39.668Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 11 items\r\n\r\ntests\\test_review_orchestration.py ...........                           [100%]\r\n\r\n============================= 11 passed in 1.35s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "86274b13e4150c6a5cb42ab53f54ff6394f2fa65",
+    "dirty": true
+  },
+  "source_hash": "9314c271e65e8fdbad0daf9debeec02bdbed69180d442711ba4f9a38545b6297",
+  "before_hash": "9314c271e65e8fdbad0daf9debeec02bdbed69180d442711ba4f9a38545b6297",
+  "config_hash": "18f7ee319952c3edaa792f7f9355107dd574c56ede59cb3cb569a1afb152613e",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "d9c797118ff030c74ef27435f18ff0dcf695d63dfd4a9d654472a90a66aaa4d7"
+}

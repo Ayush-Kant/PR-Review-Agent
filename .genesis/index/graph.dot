@@ -1,0 +1,12 @@
+digraph genesis {
+  rankdir=LR;
+  node [shape=box,fontname="system-ui"];
+  "file:pr_review_agent/__init__.py" [label="pr_review_agent/__init__.py",class="file"];
+  "file:pr_review_agent/intake.py" [label="pr_review_agent/intake.py",class="file"];
+  "file:pr_review_agent/orchestration.py" [label="pr_review_agent/orchestration.py",class="file"];
+  "file:pr_review_agent/retrieval.py" [label="pr_review_agent/retrieval.py",class="file"];
+  "file:tests/test_retrieval_and_findings.py" [label="tests/test_retrieval_and_findings.py",class="file"];
+  "file:tests/test_review_orchestration.py" [label="tests/test_review_orchestration.py",class="file"];
+  "file:tests/test_webhook_intake.py" [label="tests/test_webhook_intake.py",class="file"];
+
+}

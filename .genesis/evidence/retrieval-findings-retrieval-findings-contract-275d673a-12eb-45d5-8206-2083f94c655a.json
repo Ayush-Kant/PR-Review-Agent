@@ -1,0 +1,30 @@
+{
+  "task": "retrieval-findings",
+  "gate": "retrieval-findings-contract",
+  "kind": "command",
+  "attempt": "275d673a-12eb-45d5-8206-2083f94c655a",
+  "command": "python -m pytest tests/test_retrieval_and_findings.py",
+  "started_at": "2026-09-14T18:01:52.126Z",
+  "observed_at": "2026-09-14T18:01:58.510Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 14 items\r\n\r\ntests\\test_retrieval_and_findings.py ..............                      [100%]\r\n\r\n============================= 14 passed in 0.90s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "86274b13e4150c6a5cb42ab53f54ff6394f2fa65",
+    "dirty": true
+  },
+  "source_hash": "5450286ad6b4ca54e6071c58eb55d0dc984744a0dd41d95397581adb04695ea1",
+  "before_hash": "5450286ad6b4ca54e6071c58eb55d0dc984744a0dd41d95397581adb04695ea1",
+  "config_hash": "5d48fd04cd86fac653ed48b37ca1bb8c990e5e13f3e064e3030800f7c3576499",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "7bfbb89c551e25faf815a8d2f5719cccf167ad9c02f3817e54ff79f370e34859"
+}

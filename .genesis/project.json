@@ -1,0 +1,1079 @@
+{
+  "schema_version": 2,
+  "project": {
+    "name": "PR-Review-Agent",
+    "mode": "init",
+    "profile": "prototype",
+    "objective": "Build a production-grade AI Pull Request Review Agent",
+    "constraints": [],
+    "non_goals": [],
+    "trust_boundary": "local repository",
+    "created_at": "2026-09-14T14:19:56.390Z",
+    "updated_at": "2026-09-14T18:09:24.450Z"
+  },
+  "policy": {
+    "ponytail": "full",
+    "autonomy": "human-in-the-loop",
+    "learned_rule_promotion": "human-required",
+    "cleanup": "propose-only",
+    "traces": {
+      "storage": "local",
+      "commit_raw": false,
+      "redact_secrets": true
+    }
+  },
+  "lifecycle": {
+    "phase": "build",
+    "status": "active",
+    "active_task": "finding-policy-hitl",
+    "blocker": null,
+    "next_action": "Run the task pre-flight."
+  },
+  "commands": {},
+  "workflow": {
+    "type": "new-product",
+    "started_at": "2026-09-14T14:19:56.410Z",
+    "spec_check": {
+      "at": "2026-09-14T15:27:48.610Z",
+      "source_hash": "8565408645dabdf0114c496731bcb0f2b5b052bc23cda1b6a25cda076fd6153c",
+      "requirements": [
+        "AC-01",
+        "AC-02",
+        "AC-03",
+        "AC-04",
+        "AC-05",
+        "AC-06",
+        "AC-07",
+        "AC-08",
+        "AC-09",
+        "AC-10",
+        "AC-11",
+        "AC-12",
+        "AC-13",
+        "AC-14",
+        "AC-15",
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08",
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-13",
+        "FR-14",
+        "FR-15",
+        "FR-16",
+        "FR-17",
+        "FR-18",
+        "FR-19",
+        "FR-20",
+        "NFR-01",
+        "NFR-02",
+        "NFR-03",
+        "NFR-04",
+        "NFR-05",
+        "NFR-06",
+        "NFR-07",
+        "NFR-08",
+        "NFR-09",
+        "NFR-10",
+        "NFR-11",
+        "NFR-12"
+      ]
+    },
+    "plan_check": {
+      "at": "2026-09-14T15:31:19.858Z",
+      "source_hash": "e52c49539ecc360aa85930ef48a67c6cbcdc76102a32c958861214764af1e9ff"
+    },
+    "plan_approval": {
+      "human": "Ayush Kant",
+      "reason": "Approved after review of the 9 bounded implementation slices, 47-requirement coverage, requirement linkage, and executable validation gates.",
+      "at": "2026-09-14T15:32:38.520Z",
+      "source_hash": "e52c49539ecc360aa85930ef48a67c6cbcdc76102a32c958861214764af1e9ff"
+    }
+  },
+  "artifacts": [
+    {
+      "id": "SPEC-1",
+      "type": "specification",
+      "path": "SPEC.md",
+      "status": "approved",
+      "requirements": [
+        "AC-01",
+        "AC-02",
+        "AC-03",
+        "AC-04",
+        "AC-05",
+        "AC-06",
+        "AC-07",
+        "AC-08",
+        "AC-09",
+        "AC-10",
+        "AC-11",
+        "AC-12",
+        "AC-13",
+        "AC-14",
+        "AC-15",
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08",
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-13",
+        "FR-14",
+        "FR-15",
+        "FR-16",
+        "FR-17",
+        "FR-18",
+        "FR-19",
+        "FR-20",
+        "NFR-01",
+        "NFR-02",
+        "NFR-03",
+        "NFR-04",
+        "NFR-05",
+        "NFR-06",
+        "NFR-07",
+        "NFR-08",
+        "NFR-09",
+        "NFR-10",
+        "NFR-11",
+        "NFR-12"
+      ],
+      "source_hash": "8565408645dabdf0114c496731bcb0f2b5b052bc23cda1b6a25cda076fd6153c",
+      "approval": {
+        "human": "Ayush Kant",
+        "reason": "Approved after review of the 47 checked requirements and the recorded product decisions.",
+        "at": "2026-09-14T15:28:29.694Z",
+        "source_hash": "8565408645dabdf0114c496731bcb0f2b5b052bc23cda1b6a25cda076fd6153c"
+      }
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "ASSUMPTION-21b03c61",
+      "text": "The referenced 'Designing an AI Pull-Request Review Agent' study was not attached to the working tree and could not be fetched from the linked GitHub repository in this session. Until supplied, the user's detailed architecture summary is the provisional architectural source; human approval must reconcile any omitted or conflicting study guidance.",
+      "status": "open",
+      "source": "Repository inspection and GitHub fetch attempt, 2026-09-14",
+      "recorded_at": "2026-09-14T14:24:57.689Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "ASSUMPTION-b774604f",
+      "text": "Exact numeric SLOs, budgets, retention limits, and maximum supported PR size are intentionally provisional until justified by product evidence. They must remain configurable/documented and are not invented in SPEC-1.",
+      "status": "open",
+      "source": "User decision, 2026-09-14",
+      "recorded_at": "2026-09-14T14:53:11.848Z",
+      "paths": [],
+      "tags": []
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INVARIANT-dae4200e",
+      "text": "A review finding may be published to GitHub only when it is structured, traceable to repository and diff evidence, deduplicated, evaluated for confidence, and authorized by the applicable confidence-weighted human-in-the-loop policy.",
+      "source": "User architectural principles, 2026-09-14",
+      "recorded_at": "2026-09-14T14:24:57.549Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "INVARIANT-fd3d3e39",
+      "text": "When the reviewed head SHA, retrieval freshness, evidence, delivery state, authorization, or policy outcome is uncertain, the system must not publish a GitHub finding. It must hold, suppress, supersede, or fail the run with an auditable reason.",
+      "source": "User principle: slower-but-correct, 2026-09-14",
+      "recorded_at": "2026-09-14T14:27:48.612Z",
+      "paths": [],
+      "tags": []
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DECISION-f6b20267",
+      "title": "Selective specialist-review architecture",
+      "text": "The system will use an event-driven LangGraph orchestrator that routes eligible pull-request review work to independent specialists for security, correctness/quality, tests, and documentation. Their structured findings will be aggregated before any outward review action. This replaces a single monolithic reviewer and supports selective, grounded, high-value feedback.",
+      "status": "accepted",
+      "source": "User architectural blueprint, 2026-09-14",
+      "recorded_at": "2026-09-14T14:24:57.628Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-d1715a54",
+      "title": "Three durable state shapes",
+      "text": "Production design will keep three linked but distinct durable records: code memory (repository revision, chunk/location, index/embedding version, freshness, tenancy); review truth (finding lifecycle, evidence, policy disposition, human feedback, GitHub effects); and time-ordered events (event type, timestamp, correlation IDs, actor/component, version/provenance, redacted payload reference). This separation makes retrieval, publication decisions, and audit reconstruction independently reliable and versionable.",
+      "status": "accepted",
+      "source": "User architectural principles, 2026-09-14",
+      "recorded_at": "2026-09-14T14:27:48.732Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-43fa4e47",
+      "title": "Specification source boundary",
+      "text": "For SPEC-1, the only authoritative sources are the user's requirements in this conversation, the repository itself, and Genesis workflow rules. External architecture studies and previously supplied architecture documents must not be used to add, justify, or revise requirements. Existing architecture requirements remain only insofar as the user stated them in this conversation.",
+      "status": "accepted",
+      "source": "User instruction, 2026-09-14",
+      "recorded_at": "2026-09-14T14:39:05.641Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-cf2aec81",
+      "title": "V1 publication and automation policy",
+      "text": "High-impact or blocking findings require human approval before publication. Lower-risk findings may publish automatically only under configured confidence/severity policy. V1 must not make automatic code changes or merge pull requests.",
+      "status": "accepted",
+      "source": "User decision, 2026-09-14",
+      "recorded_at": "2026-09-14T14:53:12.021Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-fc39ccc4",
+      "title": "V1 tenancy and GitHub scope",
+      "text": "V1 is single-tenant and initially supports only the user's own GitHub repositories. The sole source-control surface is GitHub Pull Requests, responding to opened, reopened, and synchronized/updated events with permissions limited to reading the repository/pull request and publishing reviews. The design should remain extensible to organization and multi-tenant support without claiming it is in v1.",
+      "status": "accepted",
+      "source": "User decision, 2026-09-14",
+      "recorded_at": "2026-09-14T14:53:12.121Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-29000c03",
+      "title": "V1 platform and dashboard",
+      "text": "Use environment/configuration-based secrets, secure webhook handling, production observability, and provider-neutral abstractions where practical. Do not lock the specification to a particular AI model/provider. The dashboard is repository-user-facing for developers and engineering teams, showing review status, findings, severity/confidence, history, failures, and relevant health/operations information.",
+      "status": "accepted",
+      "source": "User decision, 2026-09-14",
+      "recorded_at": "2026-09-14T14:53:12.221Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-67711afd",
+      "title": "Production-target lifecycle",
+      "text": "SPEC-1 must not invent numeric SLOs, budgets, retention limits, or maximum PR-size limits. They remain configurable and provisional until justified by product evidence, but measurable values for each must be defined before production launch.",
+      "status": "accepted",
+      "source": "User decision, 2026-09-14",
+      "recorded_at": "2026-09-14T15:26:30.367Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-fcbe1c22",
+      "title": "Local durable queue for V1 single-tenant review build",
+      "text": "SQLite is adopted as the current local and test implementation behind the DurableJobQueue boundary for the single-tenant V1 build. The queue interface preserves durable job identity, atomic leasing, exponential backoff, retry exhaustion to dead-letter, cancellation, and correlation to deliveries and review runs. Redis/ARQ remains the intended production asynchronous queue implementation when deployment requires distributed horizontal workers; SQLite is not claimed to provide multi-node horizontal queueing.",
+      "status": "accepted",
+      "source": "Independent review requirement 3 for review-orchestration",
+      "recorded_at": "2026-09-14T16:50:27.552Z",
+      "paths": [],
+      "tags": []
+    }
+  ],
+  "knowledge": [
+    {
+      "id": "KNOWLEDGE-8ddf0643",
+      "title": "Initial architecture source",
+      "text": "The product architecture must follow the user's supplied flow: GitHub webhook; HMAC validation and delivery-id idempotency; Redis/ARQ queue; LangGraph orchestration; parallel security, correctness, test, and documentation specialists; hybrid repository retrieval; structured findings; aggregation, deduplication, confidence and HITL gating; GitHub inline review output. It also requires durable code memory, review truth, event/audit history, evaluation, observability, security, reliability, cost controls, dashboard, feedback, and drift detection.",
+      "source": "User request, 2026-09-14",
+      "tags": [],
+      "recorded_at": "2026-09-14T14:24:57.428Z",
+      "paths": []
+    }
+  ],
+  "tasks": [
+    {
+      "id": "SPEC-1",
+      "outcome": "Produce an approved, implementation-ready product specification",
+      "state": "done",
+      "risk": "medium",
+      "owner": null,
+      "scope": [
+        "SPEC.md"
+      ],
+      "dependencies": [],
+      "requirements": [],
+      "gates": [
+        {
+          "id": "independent-review",
+          "command": "",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "human": "Ayush Kant",
+            "reason": "Approved after review of the 47 checked requirements and the recorded product decisions.",
+            "source_hash": "357005ce177c8840585865a6d7db234f62b15918149b7f800b81c972e09a889c",
+            "observed_at": "2026-09-14T15:28:29.694Z"
+          },
+          "kind": "review"
+        }
+      ],
+      "next_action": "Interview the human, record durable context, and replace every placeholder in SPEC.md.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T14:19:56.410Z",
+      "updated_at": "2026-09-14T15:28:29.694Z"
+    },
+    {
+      "id": "intake-idempotency",
+      "outcome": "Implement secure GitHub pull-request intake, delivery idempotency, and immutable review snapshots.",
+      "state": "done",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-01",
+        "FR-02",
+        "FR-04",
+        "AC-01",
+        "AC-02",
+        "AC-03",
+        "AC-09",
+        "NFR-02",
+        "NFR-03"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "intake-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_webhook_intake.py",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/intake-idempotency-intake-contract-f782e210-c18d-4d3e-afec-9a1cc5f6350c.json",
+            "hash": "95bdbb1aa642b19c4585eea41066fd0107540600562951f2953696253557b42e",
+            "source_hash": "f6cc403d06dd3fd29095fd5b8707945eb08c02751a39be9356161ff30e4372fa",
+            "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+            "observed_at": "2026-09-14T16:04:31.504Z"
+          }
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/intake-idempotency-independent-review-37d66969-55ac-4ee3-a766-f25fc48bd926.json",
+            "hash": "e3f6094a165094091247ad487b2d042050df271d170d75832e6fd122cffbd355",
+            "source_hash": "f6cc403d06dd3fd29095fd5b8707945eb08c02751a39be9356161ff30e4372fa",
+            "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+            "observed_at": "2026-09-14T16:12:48.871Z"
+          }
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:29:38.129Z",
+      "updated_at": "2026-09-14T16:19:40.351Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa"
+      }
+    },
+    {
+      "id": "review-orchestration",
+      "outcome": "Implement durable asynchronous dispatch and LangGraph orchestration for independently scoped specialist reviews.",
+      "state": "done",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-03",
+        "FR-05",
+        "FR-06",
+        "AC-04",
+        "AC-10",
+        "NFR-03",
+        "NFR-04",
+        "NFR-05"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "orchestration-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_review_orchestration.py",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/review-orchestration-orchestration-contract-553f1521-94bf-4ffc-bc87-2e9f0696f51d.json",
+            "hash": "d9c797118ff030c74ef27435f18ff0dcf695d63dfd4a9d654472a90a66aaa4d7",
+            "source_hash": "9314c271e65e8fdbad0daf9debeec02bdbed69180d442711ba4f9a38545b6297",
+            "config_hash": "18f7ee319952c3edaa792f7f9355107dd574c56ede59cb3cb569a1afb152613e",
+            "observed_at": "2026-09-14T17:02:39.668Z"
+          }
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/review-orchestration-independent-review-e83c0e27-07f9-4d4f-9be7-a478e61ec368.json",
+            "hash": "5692b5cd689de5f34b4e80a3cea14bb5bccafcc94c12405e9f3468bf9edd68a8",
+            "source_hash": "9314c271e65e8fdbad0daf9debeec02bdbed69180d442711ba4f9a38545b6297",
+            "config_hash": "18f7ee319952c3edaa792f7f9355107dd574c56ede59cb3cb569a1afb152613e",
+            "observed_at": "2026-09-14T17:08:28.508Z"
+          }
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:30:00.095Z",
+      "updated_at": "2026-09-14T17:09:33.892Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
+    },
+    {
+      "id": "retrieval-findings",
+      "outcome": "Implement versioned repository memory, hybrid retrieval, and evidence-grounded structured candidate findings.",
+      "state": "done",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-07",
+        "FR-08",
+        "FR-13",
+        "AC-05",
+        "NFR-01",
+        "NFR-06",
+        "NFR-07",
+        "NFR-09"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "retrieval-findings-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_retrieval_and_findings.py",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/retrieval-findings-retrieval-findings-contract-275d673a-12eb-45d5-8206-2083f94c655a.json",
+            "hash": "7bfbb89c551e25faf815a8d2f5719cccf167ad9c02f3817e54ff79f370e34859",
+            "source_hash": "5450286ad6b4ca54e6071c58eb55d0dc984744a0dd41d95397581adb04695ea1",
+            "config_hash": "5d48fd04cd86fac653ed48b37ca1bb8c990e5e13f3e064e3030800f7c3576499",
+            "observed_at": "2026-09-14T18:01:58.510Z"
+          }
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/retrieval-findings-independent-review-dd78a8ce-deda-4c38-9808-1523bb53d382.json",
+            "hash": "b70625d45bc68ebb2d50a936e09ce14b4c551843c27c33df0260da4d79a9bfc6",
+            "source_hash": "5450286ad6b4ca54e6071c58eb55d0dc984744a0dd41d95397581adb04695ea1",
+            "config_hash": "5d48fd04cd86fac653ed48b37ca1bb8c990e5e13f3e064e3030800f7c3576499",
+            "observed_at": "2026-09-14T18:07:39.721Z"
+          }
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:30:01.345Z",
+      "updated_at": "2026-09-14T18:08:32.789Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/orchestration.py": "885f6eecafdfd7a124356ab89b9b9ed487df1fd494fcc745d8823afec264ca5c",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
+    },
+    {
+      "id": "finding-policy-hitl",
+      "outcome": "Implement finding aggregation, deduplication, confidence/risk policy, review truth, and maintainer HITL workflow.",
+      "state": "active",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-09",
+        "FR-10",
+        "FR-11",
+        "FR-14",
+        "AC-06",
+        "AC-07",
+        "AC-11",
+        "NFR-01",
+        "NFR-06",
+        "NFR-10"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "finding-policy-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_finding_policy_and_hitl.py",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:30:02.313Z",
+      "updated_at": "2026-09-14T15:30:02.314Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/orchestration.py": "885f6eecafdfd7a124356ab89b9b9ed487df1fd494fcc745d8823afec264ca5c",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
+    },
+    {
+      "id": "github-review-output",
+      "outcome": "Implement policy-permitted, current-SHA-safe, idempotent GitHub reviews and inline findings.",
+      "state": "queued",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-12",
+        "AC-08",
+        "AC-09",
+        "NFR-02",
+        "NFR-03"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "github-output-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_github_review_output.py",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:30:03.185Z",
+      "updated_at": "2026-09-14T15:30:03.186Z"
+    },
+    {
+      "id": "audit-observability-dashboard",
+      "outcome": "Implement the event/audit spine, operational telemetry, and repository-user-facing dashboard.",
+      "state": "queued",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-15",
+        "FR-17",
+        "AC-11",
+        "AC-15",
+        "NFR-06",
+        "NFR-08",
+        "NFR-10",
+        "NFR-11"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "observability-dashboard-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:30:04.255Z",
+      "updated_at": "2026-09-14T15:30:04.256Z"
+    },
+    {
+      "id": "security-boundaries",
+      "outcome": "Implement prompt-injection defenses, data and secret controls, and least-privilege repository access boundaries.",
+      "state": "queued",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-18",
+        "AC-02",
+        "AC-14",
+        "NFR-02",
+        "NFR-07"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "security-boundaries-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_security_boundaries.py",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:30:05.203Z",
+      "updated_at": "2026-09-14T15:30:05.204Z"
+    },
+    {
+      "id": "cost-budget-controls",
+      "outcome": "Implement run/component cost accounting and configurable budget, concurrency, and context controls.",
+      "state": "queued",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-19",
+        "AC-13",
+        "NFR-04",
+        "NFR-05",
+        "NFR-12"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "cost-controls-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_cost_and_budget_controls.py",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:30:06.170Z",
+      "updated_at": "2026-09-14T15:30:06.171Z"
+    },
+    {
+      "id": "evaluation-learning-drift",
+      "outcome": "Implement golden-PR evaluation, regression promotion gates, feedback capture, drift detection, and rollback controls.",
+      "state": "queued",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-16",
+        "FR-20",
+        "AC-12",
+        "NFR-09"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "evaluation-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_evaluation_learning_drift.py",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-14T15:30:07.084Z",
+      "updated_at": "2026-09-14T15:30:07.123Z"
+    }
+  ],
+  "learning_proposals": [],
+  "cleanup_proposals": [],
+  "controls": [
+    {
+      "id": "37d66969-55ac-4ee3-a766-f25fc48bd926",
+      "at": "2026-09-14T16:12:48.871Z",
+      "action": "approve",
+      "task": "intake-idempotency",
+      "human": "Ayush Kant",
+      "reason": "Reviewed and approved the corrected intake-idempotency implementation; all 5 tests and the Genesis executable gate pass.",
+      "revision": null
+    },
+    {
+      "id": "e83c0e27-07f9-4d4f-9be7-a478e61ec368",
+      "at": "2026-09-14T17:08:28.508Z",
+      "action": "approve",
+      "task": "review-orchestration",
+      "human": "Ayush Kant",
+      "reason": "Reviewed the post-correction implementation. The queue leasing race was hardened, restart durability was tested, genuine LangGraph StateGraph orchestration was added, synchronous specialist handlers are offloaded, 11 orchestration tests and 5 intake regression tests pass, and the Genesis executable gate passes.",
+      "revision": null
+    },
+    {
+      "id": "dd78a8ce-deda-4c38-9808-1523bb53d382",
+      "at": "2026-09-14T18:07:39.721Z",
+      "action": "approve",
+      "task": "retrieval-findings",
+      "human": "Ayush Kant",
+      "reason": "Reviewed the corrected retrieval-findings implementation. Evidence line ranges are verified, diff file matching is exact, token capping is strict, 14 retrieval tests plus 5 intake and 11 orchestration regression tests pass, and the Genesis executable gate passes.",
+      "revision": null
+    }
+  ],
+  "attempts": [
+    {
+      "id": "b1bf87e4-e1a0-4f72-8ccc-9c619ba45a5c",
+      "task": "intake-idempotency",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_webhook_intake.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 17752,
+      "child_pid": null,
+      "started_at": "2026-09-14T15:35:20.338Z",
+      "status": "failed",
+      "before_hash": "4714e28d2bae020aba1f6d6be9eba974dfa9a82966aeff0a32cb67b775fa3da2",
+      "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": "environment",
+      "ended_at": "2026-09-14T15:35:20.442Z"
+    },
+    {
+      "id": "fbdf862a-e338-47c8-a7bc-10f541865ece",
+      "task": "intake-idempotency",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_webhook_intake.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 22500,
+      "child_pid": 724,
+      "started_at": "2026-09-14T15:37:02.221Z",
+      "status": "passed",
+      "before_hash": "4714e28d2bae020aba1f6d6be9eba974dfa9a82966aeff0a32cb67b775fa3da2",
+      "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T15:37:07.192Z"
+    },
+    {
+      "id": "01cf902c-4ffa-43f4-8c25-7e2bab830a52",
+      "task": "intake-idempotency",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_webhook_intake.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 22212,
+      "child_pid": 11680,
+      "started_at": "2026-09-14T15:52:47.474Z",
+      "status": "passed",
+      "before_hash": "4714e28d2bae020aba1f6d6be9eba974dfa9a82966aeff0a32cb67b775fa3da2",
+      "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T15:52:49.834Z"
+    },
+    {
+      "id": "3c8d11aa-a114-4ada-a224-3e2e054e2eec",
+      "task": "intake-idempotency",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_webhook_intake.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 22824,
+      "child_pid": 21620,
+      "started_at": "2026-09-14T15:59:52.245Z",
+      "status": "passed",
+      "before_hash": "4714e28d2bae020aba1f6d6be9eba974dfa9a82966aeff0a32cb67b775fa3da2",
+      "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T15:59:53.904Z"
+    },
+    {
+      "id": "f782e210-c18d-4d3e-afec-9a1cc5f6350c",
+      "task": "intake-idempotency",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_webhook_intake.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 23288,
+      "child_pid": 24388,
+      "started_at": "2026-09-14T16:04:29.429Z",
+      "status": "passed",
+      "before_hash": "f6cc403d06dd3fd29095fd5b8707945eb08c02751a39be9356161ff30e4372fa",
+      "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T16:04:31.504Z"
+    },
+    {
+      "id": "59fa8b06-0dca-4ff5-9ef9-16285fadecc5",
+      "task": "review-orchestration",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_review_orchestration.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 18012,
+      "child_pid": 20432,
+      "started_at": "2026-09-14T16:39:16.983Z",
+      "status": "passed",
+      "before_hash": "de62c6b8f830d632e31fc733e1e3f1b647306e26d1a85bb84051c1a00dea23d2",
+      "config_hash": "18f7ee319952c3edaa792f7f9355107dd574c56ede59cb3cb569a1afb152613e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T16:39:18.959Z"
+    },
+    {
+      "id": "553f1521-94bf-4ffc-bc87-2e9f0696f51d",
+      "task": "review-orchestration",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_review_orchestration.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 8764,
+      "child_pid": 23684,
+      "started_at": "2026-09-14T17:02:34.514Z",
+      "status": "passed",
+      "before_hash": "9314c271e65e8fdbad0daf9debeec02bdbed69180d442711ba4f9a38545b6297",
+      "config_hash": "18f7ee319952c3edaa792f7f9355107dd574c56ede59cb3cb569a1afb152613e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T17:02:39.668Z"
+    },
+    {
+      "id": "a2b45fb9-28e2-4216-b5d2-9d4bb03d0c08",
+      "task": "retrieval-findings",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_retrieval_and_findings.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 26016,
+      "child_pid": 25784,
+      "started_at": "2026-09-14T17:40:44.933Z",
+      "status": "passed",
+      "before_hash": "7400440a8e33393366956e1bb56d9a801f790f8626c743bc9385f18a5e24205e",
+      "config_hash": "5d48fd04cd86fac653ed48b37ca1bb8c990e5e13f3e064e3030800f7c3576499",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T17:40:55.116Z"
+    },
+    {
+      "id": "275d673a-12eb-45d5-8206-2083f94c655a",
+      "task": "retrieval-findings",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_retrieval_and_findings.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 24552,
+      "child_pid": 4072,
+      "started_at": "2026-09-14T18:01:52.126Z",
+      "status": "passed",
+      "before_hash": "5450286ad6b4ca54e6071c58eb55d0dc984744a0dd41d95397581adb04695ea1",
+      "config_hash": "5d48fd04cd86fac653ed48b37ca1bb8c990e5e13f3e064e3030800f7c3576499",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T18:01:58.509Z"
+    }
+  ],
+  "authorizations": [],
+  "experiments": [],
+  "incidents": [],
+  "discovery": null,
+  "checkpoint": {
+    "at": "2026-09-14T18:09:23.781Z",
+    "revision": {
+      "commit": "86274b13e4150c6a5cb42ab53f54ff6394f2fa65",
+      "dirty": true,
+      "source_hash": "5450286ad6b4ca54e6071c58eb55d0dc984744a0dd41d95397581adb04695ea1"
+    },
+    "active_task": "finding-policy-hitl",
+    "next_action": "Run the task pre-flight."
+  },
+  "legacy": null
+}

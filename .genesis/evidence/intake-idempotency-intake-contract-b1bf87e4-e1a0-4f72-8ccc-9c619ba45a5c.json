@@ -1,0 +1,29 @@
+{
+  "task": "intake-idempotency",
+  "gate": "intake-contract",
+  "kind": "command",
+  "attempt": "b1bf87e4-e1a0-4f72-8ccc-9c619ba45a5c",
+  "command": "python -m pytest tests/test_webhook_intake.py",
+  "started_at": "2026-09-14T15:35:20.338Z",
+  "observed_at": "2026-09-14T15:35:20.442Z",
+  "exit_code": null,
+  "stdout": "",
+  "stderr": "spawn EPERM",
+  "failure": "environment",
+  "receipt": null,
+  "revision": {
+    "commit": null,
+    "dirty": null
+  },
+  "source_hash": "4714e28d2bae020aba1f6d6be9eba974dfa9a82966aeff0a32cb67b775fa3da2",
+  "before_hash": "4714e28d2bae020aba1f6d6be9eba974dfa9a82966aeff0a32cb67b775fa3da2",
+  "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "5128d0c8717a49ba1b7858a5fc84876b6617cbc2a1bd92ea6f084a51f1f80540"
+}

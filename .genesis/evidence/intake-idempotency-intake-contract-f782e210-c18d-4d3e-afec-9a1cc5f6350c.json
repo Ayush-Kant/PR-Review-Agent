@@ -1,0 +1,30 @@
+{
+  "task": "intake-idempotency",
+  "gate": "intake-contract",
+  "kind": "command",
+  "attempt": "f782e210-c18d-4d3e-afec-9a1cc5f6350c",
+  "command": "python -m pytest tests/test_webhook_intake.py",
+  "started_at": "2026-09-14T16:04:29.429Z",
+  "observed_at": "2026-09-14T16:04:31.504Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1\r\ncollected 5 items\r\n\r\ntests\\test_webhook_intake.py .....                                       [100%]\r\n\r\n============================== 5 passed in 0.06s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "86274b13e4150c6a5cb42ab53f54ff6394f2fa65",
+    "dirty": true
+  },
+  "source_hash": "f6cc403d06dd3fd29095fd5b8707945eb08c02751a39be9356161ff30e4372fa",
+  "before_hash": "f6cc403d06dd3fd29095fd5b8707945eb08c02751a39be9356161ff30e4372fa",
+  "config_hash": "bb66cdeaec18b646b0ca53b9df4fa34b1dcffa7fb07715571e3ceccddca8c2be",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "95bdbb1aa642b19c4585eea41066fd0107540600562951f2953696253557b42e"
+}
