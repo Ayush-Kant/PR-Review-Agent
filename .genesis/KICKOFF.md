@@ -4,11 +4,11 @@
 
 - objective: Build a production-grade AI Pull Request Review Agent
 - phase/status: build/active
-- active task: github-review-output — Implement policy-permitted, current-SHA-safe, idempotent GitHub reviews and inline findings.
+- active task: audit-observability-dashboard — Implement the event/audit spine, operational telemetry, and repository-user-facing dashboard.
 - blocker: none
 - next action: Run the task pre-flight.
 - phase instruction: Implement only the active task and prove it against current sources. Check `genesis query . impact PATH` before editing shared code.
-- gates: github-output-contract:pending, independent-review:pending
+- gates: observability-dashboard-contract:pending, independent-review:pending
 - recent failures: none
 
 ## Resume
@@ -17,9 +17,9 @@ Load Genesis and official Ponytail full, then run `genesis brief .` for the curr
 Fetch full records with `genesis context . --id ID` only when needed. Do not load project.json or historical proof wholesale.
 Ask the index before reading code: `genesis query . search|scope|callers|callees|impact|path` (`--json` for parsing). Run `genesis query . impact PATH` before editing shared code. Answers are advisory static analysis; `ambiguous` means candidates were not ruled out, so confirm in source.
 Run `genesis serve .` for a live map of the repository when structure is unclear; it reindexes on save and is read-only. Run `genesis index .` if the index is stale and nothing is watching.
-Context fingerprint: a62450c4fe22254dccba8a73fda155e0e08e3a0cfb8305809bc7fbe3956f6da7. Use --since only after receiving that full packet; kickoff is not the packet.
+Context fingerprint: 7ba8ea9fa5e35bde8a0a59eb550e09fccc68b6a96cef3543946159e6fae086c5. Use --since only after receiving that full packet; kickoff is not the packet.
 - KNOWLEDGE-8ddf0643: Initial architecture source
-- DECISION-fc39ccc4: V1 tenancy and GitHub scope
-- DECISION-cf2aec81: V1 publication and automation policy
+- DECISION-29000c03: V1 platform and dashboard
+- DECISION-d1715a54: Three durable state shapes
 Applicable invariants, active rules, authorization and proof references are in the packet. Truncated summaries are retrieval pointers, not the full evidence.
 Reuse fresh gates with --reuse. Reconcile interrupted attempts before replaying commands. Report state → evidence → blocker → next action; checkpoint before stopping.

@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-14T19:14:59.176Z"
+    "updated_at": "2026-09-14T19:55:06.897Z"
   },
   "policy": {
     "ponytail": "full",
@@ -25,7 +25,7 @@
   "lifecycle": {
     "phase": "build",
     "status": "active",
-    "active_task": "github-review-output",
+    "active_task": "audit-observability-dashboard",
     "blocker": null,
     "next_action": "Run the task pre-flight."
   },
@@ -604,7 +604,7 @@
     {
       "id": "github-review-output",
       "outcome": "Implement policy-permitted, current-SHA-safe, idempotent GitHub reviews and inline findings.",
-      "state": "active",
+      "state": "done",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -625,16 +625,28 @@
           "kind": "command",
           "command": "python -m pytest tests/test_github_review_output.py",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/github-review-output-github-output-contract-5f23112a-474e-4b54-a670-8a3a3e7f27c7.json",
+            "hash": "52f6115766e08532e76e5a4093c27a875b8ce455d69549637472394d1b7890e3",
+            "source_hash": "c05475a62d9cdc477fdde12bc151340959f77d2cf84ad420850a1f19cf511670",
+            "config_hash": "c5745126751acb10617459a82c80e840604434ba8a46204d8e856b4400336c36",
+            "observed_at": "2026-09-14T19:52:35.041Z"
+          }
         },
         {
           "id": "independent-review",
           "kind": "review",
           "command": "",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/github-review-output-independent-review-00546ae0-a38c-4070-8478-936023cb2e74.json",
+            "hash": "b17a928da43a0d22bf785e6812be1b36d200aadb837c2d41b694402514b09aa3",
+            "source_hash": "c05475a62d9cdc477fdde12bc151340959f77d2cf84ad420850a1f19cf511670",
+            "config_hash": "c5745126751acb10617459a82c80e840604434ba8a46204d8e856b4400336c36",
+            "observed_at": "2026-09-14T19:54:45.890Z"
+          }
         }
       ],
       "next_action": "Run the task pre-flight.",
@@ -643,7 +655,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:03.185Z",
-      "updated_at": "2026-09-14T15:30:03.186Z",
+      "updated_at": "2026-09-14T19:54:56.085Z",
       "base_manifest": {
         ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
         "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
@@ -662,7 +674,7 @@
     {
       "id": "audit-observability-dashboard",
       "outcome": "Implement the event/audit spine, operational telemetry, and repository-user-facing dashboard.",
-      "state": "queued",
+      "state": "active",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -704,7 +716,23 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:04.255Z",
-      "updated_at": "2026-09-14T15:30:04.256Z"
+      "updated_at": "2026-09-14T15:30:04.256Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/github_output.py": "a814c4cba57dbebd4744bf4145bf512d8eda6feaafc68808fadc1171d0bf085d",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/orchestration.py": "885f6eecafdfd7a124356ab89b9b9ed487df1fd494fcc745d8823afec264ca5c",
+        "pr_review_agent/policy.py": "bb4773ba51936ec7f760fd83909dfa8b9dac1ae1249bf376ab420e2273c0b645",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "tests/test_finding_policy_and_hitl.py": "ada104191955a41a87c1579603598d8127dd89fdb61ab333e7090f2c0f0c0606",
+        "tests/test_github_review_output.py": "973120555a9566d35dd89569f8ed03924d11c9c77c8f8792788946df0c7f8f8a",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     },
     {
       "id": "security-boundaries",
@@ -875,6 +903,15 @@
       "task": "finding-policy-hitl",
       "human": "Ayush Kant",
       "reason": "Reviewed implementation, tests, fail-closed policy, Review Truth lifecycle, HITL authorization, scope, and Genesis bookkeeping; approved.",
+      "revision": null
+    },
+    {
+      "id": "00546ae0-a38c-4070-8478-936023cb2e74",
+      "at": "2026-09-14T19:54:45.890Z",
+      "action": "approve",
+      "task": "github-review-output",
+      "human": "Ayush Kant",
+      "reason": "Reviewed current-SHA safety, external publication crash recovery, durable idempotency, policy authorization, inline-position safety, Review Truth integration, permissions, and 60/60 regression tests.",
       "revision": null
     }
   ],
@@ -1142,6 +1179,54 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-14T19:05:11.442Z"
+    },
+    {
+      "id": "dbfbe6ac-2dee-4b3a-85ab-79ea1acf9462",
+      "task": "github-review-output",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_github_review_output.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 14732,
+      "child_pid": 17792,
+      "started_at": "2026-09-14T19:37:17.240Z",
+      "status": "passed",
+      "before_hash": "5c74d57de15bc8084d0bdb41f74cf1d5785ecd044dd0dc3c817467598b14415b",
+      "config_hash": "c5745126751acb10617459a82c80e840604434ba8a46204d8e856b4400336c36",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T19:37:21.964Z"
+    },
+    {
+      "id": "5f23112a-474e-4b54-a670-8a3a3e7f27c7",
+      "task": "github-review-output",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_github_review_output.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 26152,
+      "child_pid": 24828,
+      "started_at": "2026-09-14T19:52:30.523Z",
+      "status": "passed",
+      "before_hash": "c05475a62d9cdc477fdde12bc151340959f77d2cf84ad420850a1f19cf511670",
+      "config_hash": "c5745126751acb10617459a82c80e840604434ba8a46204d8e856b4400336c36",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T19:52:35.041Z"
     }
   ],
   "authorizations": [],
@@ -1149,13 +1234,13 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-14T19:14:58.860Z",
+    "at": "2026-09-14T19:55:06.684Z",
     "revision": {
-      "commit": "67ccc234ac47ad9cc7945e955445dad88940e833",
+      "commit": "9ddc4e1d49af25d4efa1758672a41c126961a55b",
       "dirty": true,
-      "source_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7"
+      "source_hash": "c05475a62d9cdc477fdde12bc151340959f77d2cf84ad420850a1f19cf511670"
     },
-    "active_task": "github-review-output",
+    "active_task": "audit-observability-dashboard",
     "next_action": "Run the task pre-flight."
   },
   "legacy": null

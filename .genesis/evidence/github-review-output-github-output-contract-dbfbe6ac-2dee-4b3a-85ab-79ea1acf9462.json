@@ -1,0 +1,30 @@
+{
+  "task": "github-review-output",
+  "gate": "github-output-contract",
+  "kind": "command",
+  "attempt": "dbfbe6ac-2dee-4b3a-85ab-79ea1acf9462",
+  "command": "python -m pytest tests/test_github_review_output.py",
+  "started_at": "2026-09-14T19:37:17.240Z",
+  "observed_at": "2026-09-14T19:37:21.964Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 13 items\r\n\r\ntests\\test_github_review_output.py .............                         [100%]\r\n\r\n============================= 13 passed in 0.85s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "9ddc4e1d49af25d4efa1758672a41c126961a55b",
+    "dirty": true
+  },
+  "source_hash": "5c74d57de15bc8084d0bdb41f74cf1d5785ecd044dd0dc3c817467598b14415b",
+  "before_hash": "5c74d57de15bc8084d0bdb41f74cf1d5785ecd044dd0dc3c817467598b14415b",
+  "config_hash": "c5745126751acb10617459a82c80e840604434ba8a46204d8e856b4400336c36",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "088fb475e039e78409c7c2114a9f92970e360a6f1ed50a8ddaba8f650e07c12c"
+}

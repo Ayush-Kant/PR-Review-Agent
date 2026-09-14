@@ -1,0 +1,13 @@
+{
+  "task": "github-review-output",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "00546ae0-a38c-4070-8478-936023cb2e74",
+  "human": "Ayush Kant",
+  "reason": "Reviewed current-SHA safety, external publication crash recovery, durable idempotency, policy authorization, inline-position safety, Review Truth integration, permissions, and 60/60 regression tests.",
+  "observed_at": "2026-09-14T19:54:45.890Z",
+  "source_hash": "c05475a62d9cdc477fdde12bc151340959f77d2cf84ad420850a1f19cf511670",
+  "config_hash": "c5745126751acb10617459a82c80e840604434ba8a46204d8e856b4400336c36",
+  "reviewed_proofs": "82e850973759cbe586a29607d737298b377f706efc7ee660e601d64973e07fe3",
+  "hash": "b17a928da43a0d22bf785e6812be1b36d200aadb837c2d41b694402514b09aa3"
+}
