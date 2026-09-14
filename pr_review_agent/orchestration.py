@@ -9,7 +9,7 @@ from enum import Enum
 import json
 import sqlite3
 import time
-from typing import Annotated, TypedDict
+from typing import Annotated, Any, TypedDict
 import uuid
 
 from langgraph.graph import END, START, StateGraph
@@ -106,6 +106,7 @@ class SpecialistOutput:
     findings: tuple[CandidateFinding, ...] = ()
     error_message: str | None = None
     execution_duration: float = 0.0
+    usage: Any | None = None
 
 
 @dataclass
@@ -135,6 +136,9 @@ class ReviewLifecycleState:
     audit_trail: list[AuditEvent] = field(default_factory=list)
     terminal_status: str | None = None
     aggregation_invoked: bool = False
+    is_degraded: bool = False
+    degradation_details: dict[str, Any] = field(default_factory=dict)
+    run_cost_summary: Any | None = None
 
 
 # Helper reducers for LangGraph TypedDict state
@@ -152,6 +156,7 @@ class _GraphState(TypedDict, total=False):
     run_id: str
     job_id: str
     delivery_id: str
+    repository_id: str
     head_sha: str
     correlation_id: str
     changed_files: tuple[str, ...]
@@ -159,6 +164,9 @@ class _GraphState(TypedDict, total=False):
     retrieved_evidence: tuple[str, ...]
     deadline: float
     is_cancelled: bool
+    is_degraded: bool
+    degradation_details: Annotated[dict[str, Any], _merge_dict]
+    run_cost_summary: Any
     step_states: Annotated[dict[str, str], _merge_dict]
     specialist_outputs: Annotated[dict[SpecialistType, SpecialistOutput], _merge_dict]
     partial_failures: Annotated[list[str], _merge_list]
@@ -173,8 +181,13 @@ SpecialistHandler = Callable[[SpecialistInput], SpecialistOutput | asyncio.Futur
 class DurableJobQueue:
     """A durable SQLite-backed review job queue providing Redis/ARQ equivalent semantics."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        budget_config: Any | None = None,
+    ) -> None:
         self.connection = connection
+        self.budget_config = budget_config
         self._create_schema()
 
     def _create_schema(self) -> None:
@@ -265,40 +278,87 @@ class DurableJobQueue:
             raise RuntimeError(f"Failed to persist or fetch job {job_id}")
         return job
 
-    def lease_next_job(self, now: float | None = None) -> ReviewJob | None:
-        """Atomically lease the next scheduled job using an exclusive write transaction."""
+    def lease_next_job(
+        self,
+        now: float | None = None,
+        *,
+        max_concurrency_per_repo: int | None = None,
+    ) -> ReviewJob | None:
+        """Atomically lease the next scheduled job using an exclusive write transaction.
+
+        If max_concurrency_per_repo is specified (or configured via budget_config),
+        candidate queued jobs are checked against currently running jobs for that repository,
+        skipping at-capacity repositories to prevent starvation across repositories (NFR-05).
+        """
+        effective_cap = (
+            max_concurrency_per_repo
+            if max_concurrency_per_repo is not None
+            else (
+                getattr(self.budget_config, "max_concurrent_reviews_per_repo", None)
+                if self.budget_config is not None
+                else None
+            )
+        )
         current_time = time.time() if now is None else now
         try:
             self.connection.execute("BEGIN IMMEDIATE")
         except sqlite3.OperationalError:
             pass  # Already in transaction
         try:
-            row = self.connection.execute(
-                """
-                SELECT job_id FROM review_jobs
-                WHERE state = ? AND next_run_at <= ?
-                ORDER BY next_run_at ASC, created_at ASC
-                LIMIT 1
-                """,
-                (JobState.QUEUED.value, current_time),
-            ).fetchone()
-            if not row:
-                self.connection.commit()
-                return None
-            job_id = row[0]
+            if effective_cap is None:
+                row = self.connection.execute(
+                    """
+                    SELECT job_id FROM review_jobs
+                    WHERE state = ? AND next_run_at <= ?
+                    ORDER BY next_run_at ASC, created_at ASC
+                    LIMIT 1
+                    """,
+                    (JobState.QUEUED.value, current_time),
+                ).fetchone()
+                if not row:
+                    self.connection.commit()
+                    return None
+                selected_job_id = row[0]
+            else:
+                candidate_rows = self.connection.execute(
+                    """
+                    SELECT job_id, repository_id FROM review_jobs
+                    WHERE state = ? AND next_run_at <= ?
+                    ORDER BY next_run_at ASC, created_at ASC
+                    LIMIT 50
+                    """,
+                    (JobState.QUEUED.value, current_time),
+                ).fetchall()
+                selected_job_id = None
+                for cand_job_id, cand_repo_id in candidate_rows:
+                    count_row = self.connection.execute(
+                        """
+                        SELECT COUNT(*) FROM review_jobs
+                        WHERE repository_id = ? AND state = ?
+                        """,
+                        (cand_repo_id, JobState.RUNNING.value),
+                    ).fetchone()
+                    running_count = count_row[0] if count_row else 0
+                    if running_count < effective_cap:
+                        selected_job_id = cand_job_id
+                        break
+                if selected_job_id is None:
+                    self.connection.commit()
+                    return None
+
             self.connection.execute(
                 """
                 UPDATE review_jobs
                 SET state = ?, attempt_count = attempt_count + 1, updated_at = ?
                 WHERE job_id = ?
                 """,
-                (JobState.RUNNING.value, current_time, job_id),
+                (JobState.RUNNING.value, current_time, selected_job_id),
             )
             self.connection.commit()
         except Exception:
             self.connection.rollback()
             raise
-        return self.get_job(job_id)
+        return self.get_job(selected_job_id)
 
     def mark_completed(self, job_id: str, now: float | None = None) -> ReviewJob:
         """Mark job successfully completed."""
@@ -396,9 +456,16 @@ class ReviewOrchestrator:
         self,
         specialist_handlers: Mapping[SpecialistType, SpecialistHandler] | None = None,
         default_instructions: Mapping[SpecialistType, str] | None = None,
+        *,
+        budget_enforcer: Any | None = None,
+        cost_ledger: Any | None = None,
+        pricing_registry: Any | None = None,
     ) -> None:
         self.specialist_handlers = dict(specialist_handlers or {})
         self.default_instructions = dict(default_instructions or {})
+        self.budget_enforcer = budget_enforcer
+        self.cost_ledger = cost_ledger
+        self.pricing_registry = pricing_registry
 
     def register_specialist(self, specialist_type: SpecialistType, handler: SpecialistHandler) -> None:
         """Register a handler for a specific review specialist."""
@@ -420,7 +487,15 @@ class ReviewOrchestrator:
         graph.add_edge(START, "initialize")
 
         def _route_after_init(state: _GraphState) -> str | list[str]:
-            if state.get("is_cancelled") or state.get("terminal_status") == JobState.CANCELLED.value:
+            term_status = state.get("terminal_status")
+            if state.get("is_cancelled") or term_status in (
+                JobState.CANCELLED.value,
+                JobState.FAILED.value,
+                "failed",
+                "budget_exhausted",
+                "unknown_budget_state",
+                "context_cap_exceeded",
+            ):
                 return END
             return [
                 "security_specialist",
@@ -468,6 +543,7 @@ class ReviewOrchestrator:
             "run_id": run_id,
             "job_id": job.job_id,
             "delivery_id": job.delivery_id,
+            "repository_id": job.repository_id,
             "head_sha": job.head_sha,
             "correlation_id": correlation_id,
             "changed_files": snapshot.changed_files,
@@ -475,6 +551,9 @@ class ReviewOrchestrator:
             "retrieved_evidence": retrieved_evidence,
             "deadline": deadline,
             "is_cancelled": cancellation_token,
+            "is_degraded": False,
+            "degradation_details": {},
+            "run_cost_summary": None,
             "step_states": {},
             "specialist_outputs": {},
             "partial_failures": [],
@@ -499,6 +578,9 @@ class ReviewOrchestrator:
             audit_trail=list(final_dict.get("audit_trail", [])),
             terminal_status=final_dict.get("terminal_status"),
             aggregation_invoked=final_dict.get("aggregation_invoked", False),
+            is_degraded=final_dict.get("is_degraded", False),
+            degradation_details=dict(final_dict.get("degradation_details", {})),
+            run_cost_summary=final_dict.get("run_cost_summary"),
         )
 
     async def _node_initialize(self, state: _GraphState) -> dict:
@@ -522,6 +604,56 @@ class ReviewOrchestrator:
                 "terminal_status": JobState.CANCELLED.value,
                 "audit_trail": [event, cancel_event],
             }
+
+        # Admission & context bounding evaluation (FR-19, AC-13)
+        if self.budget_enforcer is not None:
+            decision = self.budget_enforcer.check_admission(
+                repository_id=state.get("repository_id", ""),
+                diff_content=state.get("diff_content", ""),
+            )
+            if not decision.allowed:
+                rej_event = AuditEvent(
+                    correlation_id=state["correlation_id"],
+                    event_name="review_run_admission_rejected",
+                    step="initialize",
+                    timestamp=time.time(),
+                    details={
+                        "status": decision.status,
+                        "reason": decision.reason,
+                        "repository_id": state.get("repository_id", ""),
+                    },
+                )
+                return {
+                    "step_states": {"initialize": decision.status},
+                    "terminal_status": JobState.FAILED.value,
+                    "audit_trail": [event, rej_event],
+                }
+
+            if decision.is_degraded:
+                degraded_event = AuditEvent(
+                    correlation_id=state["correlation_id"],
+                    event_name="context_cap_degraded",
+                    step="initialize",
+                    timestamp=time.time(),
+                    details={
+                        "original_diff_bytes": decision.original_diff_bytes,
+                        "retained_diff_bytes": decision.retained_diff_bytes,
+                        "truncated_diff_bytes": decision.truncated_diff_bytes,
+                        "reason": decision.reason,
+                    },
+                )
+                return {
+                    "diff_content": decision.degraded_diff_content or "",
+                    "is_degraded": True,
+                    "degradation_details": {
+                        "original_diff_bytes": decision.original_diff_bytes,
+                        "retained_diff_bytes": decision.retained_diff_bytes,
+                        "truncated_diff_bytes": decision.truncated_diff_bytes,
+                        "reason": decision.reason,
+                    },
+                    "step_states": {"initialize": "completed", "specialists_dispatch": "running"},
+                    "audit_trail": [event, degraded_event],
+                }
 
         return {
             "step_states": {"initialize": "completed", "specialists_dispatch": "running"},
@@ -598,6 +730,93 @@ class ReviewOrchestrator:
         outputs = state.get("specialist_outputs", {})
         completed_count = sum(1 for o in outputs.values() if o.status == "completed")
 
+        # Cost recording and accounting (FR-19)
+        run_cost_summary = None
+        if self.cost_ledger is not None:
+            for spec_type, out in outputs.items():
+                u = getattr(out, "usage", None)
+                if u is not None:
+                    c_usd = u.cost_usd
+                    pricing_configured = u.pricing_configured
+                    if c_usd is None and self.pricing_registry is not None:
+                        calc = self.pricing_registry.calculate_cost(
+                            u.provider,
+                            u.model,
+                            u.prompt_tokens,
+                            u.completion_tokens,
+                        )
+                        if calc is not None:
+                            c_usd = calc
+                            pricing_configured = True
+
+                    from pr_review_agent.cost_controls import ComponentUsage
+
+                    final_usage = ComponentUsage(
+                        component=u.component or f"specialist_{spec_type.value}",
+                        provider=u.provider,
+                        model=u.model,
+                        prompt_tokens=u.prompt_tokens,
+                        completion_tokens=u.completion_tokens,
+                        total_tokens=u.total_tokens,
+                        cost_usd=c_usd,
+                        usage_source=u.usage_source,
+                        pricing_configured=pricing_configured,
+                    )
+                    self.cost_ledger.record_usage(
+                        run_id=state["run_id"],
+                        correlation_id=state["correlation_id"],
+                        repository_id=state.get("repository_id", ""),
+                        usage=final_usage,
+                        timestamp=now,
+                    )
+            run_cost_summary = self.cost_ledger.get_run_cost_summary(state["run_id"])
+            events.append(
+                AuditEvent(
+                    correlation_id=state["correlation_id"],
+                    event_name="cost_recorded",
+                    step="evaluate_terminal",
+                    timestamp=now,
+                    details={
+                        "total_prompt_tokens": run_cost_summary.total_prompt_tokens,
+                        "total_completion_tokens": run_cost_summary.total_completion_tokens,
+                        "total_tokens": run_cost_summary.total_tokens,
+                        "total_cost_usd": run_cost_summary.total_cost_usd,
+                        "is_cost_complete": run_cost_summary.is_cost_complete,
+                        "components_count": len(run_cost_summary.components),
+                    },
+                )
+            )
+            if self.budget_enforcer is not None:
+                within_limits, limit_reason = self.budget_enforcer.check_run_limits(
+                    run_cost_summary.total_tokens,
+                    run_cost_summary.total_cost_usd,
+                    summary=run_cost_summary,
+                )
+                if not within_limits:
+                    events.append(
+                        AuditEvent(
+                            correlation_id=state["correlation_id"],
+                            event_name="run_budget_limit_exceeded",
+                            step="evaluate_terminal",
+                            timestamp=now,
+                            details={"reason": limit_reason},
+                        )
+                    )
+        elif self.budget_enforcer is not None:
+            within_limits, limit_reason = self.budget_enforcer.check_run_limits(
+                summary=None,
+            )
+            if not within_limits:
+                events.append(
+                    AuditEvent(
+                        correlation_id=state["correlation_id"],
+                        event_name="run_budget_limit_exceeded",
+                        step="evaluate_terminal",
+                        timestamp=now,
+                        details={"reason": limit_reason},
+                    )
+                )
+
         if completed_count == 0:
             events.append(
                 AuditEvent(
@@ -612,6 +831,7 @@ class ReviewOrchestrator:
                 "step_states": {"specialists_dispatch": "failed"},
                 "terminal_status": "failed",
                 "aggregation_invoked": False,
+                "run_cost_summary": run_cost_summary,
                 "audit_trail": events,
             }
 
@@ -631,6 +851,7 @@ class ReviewOrchestrator:
             "step_states": {"specialists_dispatch": "completed", "aggregation": "ready"},
             "terminal_status": "completed",
             "aggregation_invoked": True,
+            "run_cost_summary": run_cost_summary,
             "audit_trail": events,
         }
 
@@ -676,6 +897,7 @@ class ReviewOrchestrator:
                 findings=output.findings,
                 error_message=output.error_message,
                 execution_duration=duration,
+                usage=getattr(output, "usage", None),
             )
         except asyncio.TimeoutError:
             return SpecialistOutput(
@@ -693,3 +915,61 @@ class ReviewOrchestrator:
                 error_message=str(err),
                 execution_duration=time.time() - start_time,
             )
+
+
+class ReviewWorker:
+    """Runtime worker/dispatcher that leases jobs and processes them via ReviewOrchestrator.
+
+    Enforces runtime concurrency caps (NFR-05) by propagating the configured
+    CostAndBudgetConfig.max_concurrent_reviews_per_repo into lease_next_job().
+    """
+
+    def __init__(
+        self,
+        queue: DurableJobQueue,
+        orchestrator: ReviewOrchestrator,
+        *,
+        budget_config: Any | None = None,
+    ) -> None:
+        self.queue = queue
+        self.orchestrator = orchestrator
+        self.budget_config = budget_config or getattr(queue, "budget_config", None)
+
+    def lease_job(self, now: float | None = None) -> ReviewJob | None:
+        """Lease the next eligible job from the queue with configured concurrency cap."""
+        cap = (
+            getattr(self.budget_config, "max_concurrent_reviews_per_repo", None)
+            if self.budget_config is not None
+            else None
+        )
+        return self.queue.lease_next_job(now=now, max_concurrency_per_repo=cap)
+
+    async def run_next_job(
+        self,
+        snapshot: ReviewSnapshot,
+        *,
+        diff_content: str = "",
+        retrieved_evidence: tuple[str, ...] = (),
+        run_deadline_seconds: float | None = None,
+        now: float | None = None,
+    ) -> tuple[ReviewJob | None, ReviewLifecycleState | None]:
+        """Lease the next eligible job, execute the review lifecycle, and record final status."""
+        job = self.lease_job(now=now)
+        if job is None:
+            return None, None
+        try:
+            state = await self.orchestrator.execute_run(
+                job=job,
+                snapshot=snapshot,
+                diff_content=diff_content,
+                retrieved_evidence=retrieved_evidence,
+                run_deadline_seconds=run_deadline_seconds,
+            )
+            if state.terminal_status in (JobState.FAILED.value, "failed"):
+                self.queue.mark_failed(job.job_id, "Review run failed during execution", now=now)
+            else:
+                self.queue.mark_completed(job.job_id, now=now)
+            return job, state
+        except Exception as exc:
+            self.queue.mark_failed(job.job_id, str(exc), now=now)
+            raise

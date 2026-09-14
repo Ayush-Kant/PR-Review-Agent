@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "c7a595aa8092ec3699c185d3f7cd1ca2641a2cd5",
-  "sourceHash": "936312be553bd1d6de861111bb5d5679999b060e074126c5a038e577d71150aa",
+  "revision": "df28ee5bbe989e010c1ce0f78bb378478db570e7",
+  "sourceHash": "9448a0c7d6b5c161099aa836c6bec3cd92af4bfff7b7974b9020fb61229003f1",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -18,6 +18,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "a650975c324a6795e21cc40682fc7e9ded58950b5f965aec1512690b56fe33a1"
+    },
+    {
+      "id": "file:pr_review_agent/cost_controls.py",
+      "type": "file",
+      "label": "pr_review_agent/cost_controls.py",
+      "path": "pr_review_agent/cost_controls.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "10ac820ecf22529c59ffc671487a4fa162c0a7c1daa9a31f16f9cbc359d3da7e"
     },
     {
       "id": "file:pr_review_agent/github_output.py",
@@ -47,7 +57,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "79fe025c582d943e070da4fd3480315cdecb3464552e6feb6a205df0f1565bfd"
+      "contentHash": "66a2dd0b2677ab8e69caa33ca676103eacf361a0da12e0ede5784580cab4fdbd"
     },
     {
       "id": "file:pr_review_agent/orchestration.py",
@@ -57,7 +67,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "7f94e5b91e4194f71391886e1b70027a9a8d3999b6f431bef9520a3df4112fbc"
+      "contentHash": "9c0e56e8476133477f5dfe82d6a8d4da414ae41c1b9bc6a44e224ebc3d9b52e4"
     },
     {
       "id": "file:pr_review_agent/policy.py",
@@ -98,6 +108,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "8662b921a3956b4329708feb7a973be108cfbc1de7575cc568076f1d44afb5ce"
+    },
+    {
+      "id": "file:tests/test_cost_and_budget_controls.py",
+      "type": "file",
+      "label": "tests/test_cost_and_budget_controls.py",
+      "path": "tests/test_cost_and_budget_controls.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "c3bff60c5724b7b33e60d9b723afad50e2676fb443a161fe3ae186af836ced49"
     },
     {
       "id": "file:tests/test_finding_policy_and_hitl.py",
@@ -147,7 +167,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "b0ccb2175768fcb7ce88a2c6ced8c325beb99562d6f5efe23b4ba61362b5d50b"
+      "contentHash": "85703c96d3bb5076cf2429ac28bdc7caf2b23460db1e8597024fad4f9e8f9286"
     },
     {
       "id": "file:tests/test_webhook_intake.py",

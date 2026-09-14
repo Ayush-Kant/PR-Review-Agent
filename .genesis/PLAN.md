@@ -66,15 +66,15 @@
 
 ### cost-budget-controls — Implement run/component cost accounting and configurable budget, concurrency, and context controls.
 
-- state/risk: active / medium
+- state/risk: done / medium
 - requirements: FR-19, AC-13, NFR-04, NFR-05, NFR-12
 - scope: not bounded
-- gates: cost-controls-contract: python -m pytest tests/test_cost_and_budget_controls.py, independent-review: pending
+- gates: cost-controls-contract: python -m pytest tests/test_cost_and_budget_controls.py, independent-review: pass
 - next: Run the task pre-flight.
 
 ### evaluation-learning-drift — Implement golden-PR evaluation, regression promotion gates, feedback capture, drift detection, and rollback controls.
 
-- state/risk: queued / medium
+- state/risk: active / medium
 - requirements: FR-16, FR-20, AC-12, NFR-09
 - scope: not bounded
 - gates: evaluation-contract: python -m pytest tests/test_evaluation_learning_drift.py, independent-review: pending

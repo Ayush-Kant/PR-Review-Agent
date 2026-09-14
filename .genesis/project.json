@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-14T21:54:20.129Z"
+    "updated_at": "2026-09-14T22:31:41.409Z"
   },
   "policy": {
     "ponytail": "full",
@@ -25,7 +25,7 @@
   "lifecycle": {
     "phase": "build",
     "status": "active",
-    "active_task": "cost-budget-controls",
+    "active_task": "evaluation-learning-drift",
     "blocker": null,
     "next_action": "Run the task pre-flight."
   },
@@ -823,7 +823,7 @@
     {
       "id": "cost-budget-controls",
       "outcome": "Implement run/component cost accounting and configurable budget, concurrency, and context controls.",
-      "state": "active",
+      "state": "done",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -844,16 +844,28 @@
           "kind": "command",
           "command": "python -m pytest tests/test_cost_and_budget_controls.py",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/cost-budget-controls-cost-controls-contract-e3e1d328-f631-4def-be31-f0b1ec58ec0a.json",
+            "hash": "f8ce828f28eb4749451e405714f18c52a562610642a1bf074c66a0abfcf7d112",
+            "source_hash": "795c2e5d533f1320b9c88363013963af1b003da90177a80138b58e73b17f03ff",
+            "config_hash": "0507bb003f4de8b9e3a98ffa89edc31326f05ea43a97b7dc02c96d14a5675291",
+            "observed_at": "2026-09-14T22:30:05.392Z"
+          }
         },
         {
           "id": "independent-review",
           "kind": "review",
           "command": "",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/cost-budget-controls-independent-review-641e468c-47af-4ae7-b32b-3a8bfd4cfba1.json",
+            "hash": "f78ab45f47085ac346b605d239a2712d9854f5e923f9724ce006260b3c286e81",
+            "source_hash": "795c2e5d533f1320b9c88363013963af1b003da90177a80138b58e73b17f03ff",
+            "config_hash": "0507bb003f4de8b9e3a98ffa89edc31326f05ea43a97b7dc02c96d14a5675291",
+            "observed_at": "2026-09-14T22:30:14.251Z"
+          }
         }
       ],
       "next_action": "Run the task pre-flight.",
@@ -862,7 +874,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:06.170Z",
-      "updated_at": "2026-09-14T15:30:06.171Z",
+      "updated_at": "2026-09-14T22:31:28.881Z",
       "base_manifest": {
         ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
         "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
@@ -887,7 +899,7 @@
     {
       "id": "evaluation-learning-drift",
       "outcome": "Implement golden-PR evaluation, regression promotion gates, feedback capture, drift detection, and rollback controls.",
-      "state": "queued",
+      "state": "active",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -925,7 +937,29 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:07.084Z",
-      "updated_at": "2026-09-14T15:30:07.123Z"
+      "updated_at": "2026-09-14T15:30:07.123Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/cost_controls.py": "b55e03c0e86b9add48d9d7b28e3d8bca3f034ca7bec177cf2dd0245150f60d2e",
+        "pr_review_agent/github_output.py": "ef66bd4121b68bb1d44e6ab3ea110746404dd05fb936d00fca957491fc370e60",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/observability.py": "73f34d5a5d3c99a69e2016657277fc89d1f41ae87a4b49557cf57a7c9acc17f7",
+        "pr_review_agent/orchestration.py": "c1ac56039f5ce26e06e30a401c3adfeb5bbe36b7284c8e9667107f16ab7ab0b5",
+        "pr_review_agent/policy.py": "bb4773ba51936ec7f760fd83909dfa8b9dac1ae1249bf376ab420e2273c0b645",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "pr_review_agent/security.py": "273fc57ed51b7e7110669c9416211ed1f174c33d959d38053c9196972da05021",
+        "tests/test_audit_observability_dashboard.py": "6b2982f18570ad0ee42cc475a2639ae914d4df80cf7f6bbb76fb74775a75bfdc",
+        "tests/test_cost_and_budget_controls.py": "07813b8f14603149306d1366517d2dde124be70552f96f26b914a0b45cdc639e",
+        "tests/test_finding_policy_and_hitl.py": "ada104191955a41a87c1579603598d8127dd89fdb61ab333e7090f2c0f0c0606",
+        "tests/test_github_review_output.py": "40e2ae39b0edec6da8cbe268b27a626ad8d60336f1d110d547f0bfb948f37b7a",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     }
   ],
   "learning_proposals": [],
@@ -992,6 +1026,15 @@
       "task": "security-boundaries",
       "human": "Ayush Kant",
       "reason": "Implementation reviewed after security-boundary refinements. Focused security tests 18/18, full regression 98/98, Genesis executable gate passed, and the tightened prompt-injection, secret-boundary, least-privilege, and tenancy controls are accepted for independent review.",
+      "revision": null
+    },
+    {
+      "id": "641e468c-47af-4ae7-b32b-3a8bfd4cfba1",
+      "at": "2026-09-14T22:30:14.251Z",
+      "action": "approve",
+      "task": "cost-budget-controls",
+      "human": "Ayush Kant",
+      "reason": "Implementation reviewed after runtime concurrency wiring and incomplete-cost fail-closed refinements. Focused cost/budget tests pass, full regression passes, Genesis executable gate passes, no invented numeric defaults, provider pricing remains configurable, and unknown usage is never treated as zero for hard-budget decisions.",
       "revision": null
     }
   ],
@@ -1547,6 +1590,78 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-14T21:48:11.767Z"
+    },
+    {
+      "id": "dfa42a2c-9f7c-46b7-a205-75621170990c",
+      "task": "cost-budget-controls",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_cost_and_budget_controls.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 19944,
+      "child_pid": 19676,
+      "started_at": "2026-09-14T22:11:46.389Z",
+      "status": "passed",
+      "before_hash": "d62439aad47811bf8a72521d2a290be0e9f4ec7f51c0f8694357b3d5ae6757a0",
+      "config_hash": "0507bb003f4de8b9e3a98ffa89edc31326f05ea43a97b7dc02c96d14a5675291",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T22:11:52.495Z"
+    },
+    {
+      "id": "876e18ad-1ab2-4323-b4ba-6232547094ff",
+      "task": "cost-budget-controls",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_cost_and_budget_controls.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 16664,
+      "child_pid": 11700,
+      "started_at": "2026-09-14T22:22:56.920Z",
+      "status": "passed",
+      "before_hash": "62a4299f67c73b8f9667e2b8056b41f6f71a34ea11f0301cd0a36f8e7ac18e29",
+      "config_hash": "0507bb003f4de8b9e3a98ffa89edc31326f05ea43a97b7dc02c96d14a5675291",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T22:23:06.189Z"
+    },
+    {
+      "id": "e3e1d328-f631-4def-be31-f0b1ec58ec0a",
+      "task": "cost-budget-controls",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_cost_and_budget_controls.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 17360,
+      "child_pid": 21888,
+      "started_at": "2026-09-14T22:29:55.857Z",
+      "status": "passed",
+      "before_hash": "795c2e5d533f1320b9c88363013963af1b003da90177a80138b58e73b17f03ff",
+      "config_hash": "0507bb003f4de8b9e3a98ffa89edc31326f05ea43a97b7dc02c96d14a5675291",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T22:30:05.392Z"
     }
   ],
   "authorizations": [],
@@ -1554,13 +1669,13 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-14T21:54:19.656Z",
+    "at": "2026-09-14T22:31:41.080Z",
     "revision": {
-      "commit": "c7a595aa8092ec3699c185d3f7cd1ca2641a2cd5",
+      "commit": "df28ee5bbe989e010c1ce0f78bb378478db570e7",
       "dirty": true,
-      "source_hash": "f38b8238be288a02ed51ec478ee8d5e8ff8497f7abb07f381dd1c3311cfcdad1"
+      "source_hash": "795c2e5d533f1320b9c88363013963af1b003da90177a80138b58e73b17f03ff"
     },
-    "active_task": "cost-budget-controls",
+    "active_task": "evaluation-learning-drift",
     "next_action": "Run the task pre-flight."
   },
   "legacy": null

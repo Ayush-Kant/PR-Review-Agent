@@ -539,13 +539,22 @@ class TelemetrySnapshot:
     finding_dispositions: dict[str, int]
     publication_outcomes: dict[str, int]
     active_alerts: list[OperationalAlert] = field(default_factory=list)
+    total_cost_usd: float = 0.0
 
 
 class OperationalTelemetry:
     """Evaluates and serves operational health, queue latency, and telemetry signals."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        cost_ledger: Any | None = None,
+        budget_config: Any | None = None,
+    ) -> None:
         self.connection = connection
+        self.cost_ledger = cost_ledger
+        self.budget_config = budget_config
 
     def _resolve_correlation_repository(
         self,
@@ -980,6 +989,48 @@ class OperationalTelemetry:
                 )
             )
 
+        # Budget exhaustion & warning alerts (NFR-08, NFR-12)
+        total_recorded_cost = 0.0
+        if self.cost_ledger is not None:
+            total_recorded_cost = (
+                self.cost_ledger.get_repository_spend(repository_id)
+                if repository_id
+                else 0.0
+            )
+            if (
+                self.budget_config is not None
+                and self.budget_config.monthly_budget_usd is not None
+            ):
+                budget_cap = self.budget_config.monthly_budget_usd
+                if total_recorded_cost >= budget_cap:
+                    alerts.append(
+                        OperationalAlert(
+                            alert_id="ALERT-BUDGET-EXHAUSTION",
+                            severity="critical",
+                            category="budget",
+                            message="Configured repository budget limit exhausted",
+                            threshold=f"${budget_cap:.2f}",
+                            current_value=f"${total_recorded_cost:.2f}",
+                            timestamp=current_time,
+                        )
+                    )
+                elif (
+                    self.budget_config.soft_budget_ratio is not None
+                    and total_recorded_cost >= (budget_cap * self.budget_config.soft_budget_ratio)
+                ):
+                    soft_thresh = budget_cap * self.budget_config.soft_budget_ratio
+                    alerts.append(
+                        OperationalAlert(
+                            alert_id="ALERT-BUDGET-WARNING",
+                            severity="warning",
+                            category="budget",
+                            message="Repository spend reached soft budget warning threshold",
+                            threshold=f"${soft_thresh:.2f}",
+                            current_value=f"${total_recorded_cost:.2f}",
+                            timestamp=current_time,
+                        )
+                    )
+
         return TelemetrySnapshot(
             timestamp=current_time,
             repository_id=repository_id,
@@ -995,6 +1046,7 @@ class OperationalTelemetry:
             finding_dispositions=dispositions,
             publication_outcomes=pub_outcomes,
             active_alerts=alerts,
+            total_cost_usd=round(total_recorded_cost, 6),
         )
 
 

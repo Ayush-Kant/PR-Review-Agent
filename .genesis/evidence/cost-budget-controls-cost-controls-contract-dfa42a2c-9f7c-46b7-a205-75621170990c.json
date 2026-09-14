@@ -1,0 +1,30 @@
+{
+  "task": "cost-budget-controls",
+  "gate": "cost-controls-contract",
+  "kind": "command",
+  "attempt": "dfa42a2c-9f7c-46b7-a205-75621170990c",
+  "command": "python -m pytest tests/test_cost_and_budget_controls.py",
+  "started_at": "2026-09-14T22:11:46.389Z",
+  "observed_at": "2026-09-14T22:11:52.495Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 13 items\r\n\r\ntests\\test_cost_and_budget_controls.py .............                     [100%]\r\n\r\n============================= 13 passed in 1.25s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "df28ee5bbe989e010c1ce0f78bb378478db570e7",
+    "dirty": true
+  },
+  "source_hash": "d62439aad47811bf8a72521d2a290be0e9f4ec7f51c0f8694357b3d5ae6757a0",
+  "before_hash": "d62439aad47811bf8a72521d2a290be0e9f4ec7f51c0f8694357b3d5ae6757a0",
+  "config_hash": "0507bb003f4de8b9e3a98ffa89edc31326f05ea43a97b7dc02c96d14a5675291",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "d0f546a9763f3a47a8547cd3e0251f9a80ce4c92a112ec66a04a514ce8b91107"
+}
