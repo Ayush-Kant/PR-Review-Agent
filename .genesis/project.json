@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-14T19:55:06.897Z"
+    "updated_at": "2026-09-14T21:12:50.065Z"
   },
   "policy": {
     "ponytail": "full",
@@ -25,7 +25,7 @@
   "lifecycle": {
     "phase": "build",
     "status": "active",
-    "active_task": "audit-observability-dashboard",
+    "active_task": "security-boundaries",
     "blocker": null,
     "next_action": "Run the task pre-flight."
   },
@@ -674,7 +674,7 @@
     {
       "id": "audit-observability-dashboard",
       "outcome": "Implement the event/audit spine, operational telemetry, and repository-user-facing dashboard.",
-      "state": "active",
+      "state": "done",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -698,16 +698,28 @@
           "kind": "command",
           "command": "python -m pytest tests/test_audit_observability_dashboard.py",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/audit-observability-dashboard-observability-dashboard-contract-466b193b-0f01-429d-90c8-850eb6eef44a.json",
+            "hash": "d04e3cca5e57c7012d136ce2ec4d455a2f27994264dc1bb1d1cb7b488d912fed",
+            "source_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+            "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+            "observed_at": "2026-09-14T21:05:40.545Z"
+          }
         },
         {
           "id": "independent-review",
           "kind": "review",
           "command": "",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/audit-observability-dashboard-independent-review-1e62116b-1cc6-4253-afd7-e9350d5ee6f5.json",
+            "hash": "f0ce0abfb08f61ba1d6633b99b1771332d8e25a648c55e48fd8dbc3a0d3e6302",
+            "source_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+            "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+            "observed_at": "2026-09-14T21:11:54.479Z"
+          }
         }
       ],
       "next_action": "Run the task pre-flight.",
@@ -716,7 +728,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:04.255Z",
-      "updated_at": "2026-09-14T15:30:04.256Z",
+      "updated_at": "2026-09-14T21:12:42.440Z",
       "base_manifest": {
         ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
         "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
@@ -737,7 +749,7 @@
     {
       "id": "security-boundaries",
       "outcome": "Implement prompt-injection defenses, data and secret controls, and least-privilege repository access boundaries.",
-      "state": "queued",
+      "state": "active",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -776,7 +788,25 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:05.203Z",
-      "updated_at": "2026-09-14T15:30:05.204Z"
+      "updated_at": "2026-09-14T15:30:05.204Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/github_output.py": "a814c4cba57dbebd4744bf4145bf512d8eda6feaafc68808fadc1171d0bf085d",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/observability.py": "2d70e9af86d73fff8ba8b22e846f03d94ec8f2cea6c856a135d9f06da63bf3ac",
+        "pr_review_agent/orchestration.py": "885f6eecafdfd7a124356ab89b9b9ed487df1fd494fcc745d8823afec264ca5c",
+        "pr_review_agent/policy.py": "bb4773ba51936ec7f760fd83909dfa8b9dac1ae1249bf376ab420e2273c0b645",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "tests/test_audit_observability_dashboard.py": "6b2982f18570ad0ee42cc475a2639ae914d4df80cf7f6bbb76fb74775a75bfdc",
+        "tests/test_finding_policy_and_hitl.py": "ada104191955a41a87c1579603598d8127dd89fdb61ab333e7090f2c0f0c0606",
+        "tests/test_github_review_output.py": "40e2ae39b0edec6da8cbe268b27a626ad8d60336f1d110d547f0bfb948f37b7a",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     },
     {
       "id": "cost-budget-controls",
@@ -912,6 +942,15 @@
       "task": "github-review-output",
       "human": "Ayush Kant",
       "reason": "Reviewed current-SHA safety, external publication crash recovery, durable idempotency, policy authorization, inline-position safety, Review Truth integration, permissions, and 60/60 regression tests.",
+      "revision": null
+    },
+    {
+      "id": "1e62116b-1cc6-4253-afd7-e9350d5ee6f5",
+      "at": "2026-09-14T21:11:54.479Z",
+      "action": "approve",
+      "task": "audit-observability-dashboard",
+      "human": "Ayush Kant",
+      "reason": "Independent review passed: 20/20 focused tests, 80/80 full regression, Genesis executable gate passed, provenance isolation and fail-closed repository lineage verified, append-only audit enforcement verified, and no blocking scope/security/correctness issues found.",
       "revision": null
     }
   ],
@@ -1227,6 +1266,174 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-14T19:52:35.041Z"
+    },
+    {
+      "id": "086cebfa-02b8-435e-87e0-95dc2039d700",
+      "task": "audit-observability-dashboard",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 26588,
+      "child_pid": 13660,
+      "started_at": "2026-09-14T20:13:33.980Z",
+      "status": "passed",
+      "before_hash": "7e4c970b3085a6e8569c937126e15e4f88dd024f8e9f0b9748a37519c2574a92",
+      "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T20:13:38.190Z"
+    },
+    {
+      "id": "e2a3a50f-1580-40cd-9937-27413458bc7c",
+      "task": "audit-observability-dashboard",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 26376,
+      "child_pid": 24488,
+      "started_at": "2026-09-14T20:25:51.599Z",
+      "status": "passed",
+      "before_hash": "bf690c5116b31b0b75abc19505e3bcfbd6b9606c9e28663eb88f7a57f3ebc323",
+      "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T20:25:55.972Z"
+    },
+    {
+      "id": "d0c8b120-3e86-40bf-a607-a807ef464334",
+      "task": "audit-observability-dashboard",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 23184,
+      "child_pid": 25056,
+      "started_at": "2026-09-14T20:31:39.429Z",
+      "status": "passed",
+      "before_hash": "7d36d766e7bb7a046ca9cc82ff88888f82e177ec4ce13f9a67ffd11c15643168",
+      "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T20:31:43.632Z"
+    },
+    {
+      "id": "26f0b356-c57a-4750-b962-c922aad96c56",
+      "task": "audit-observability-dashboard",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 23232,
+      "child_pid": 22696,
+      "started_at": "2026-09-14T20:36:27.559Z",
+      "status": "passed",
+      "before_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+      "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T20:36:31.945Z"
+    },
+    {
+      "id": "8b3d2bd9-8a77-4d00-9e6c-f0f98db0b1b2",
+      "task": "audit-observability-dashboard",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 22796,
+      "child_pid": 24168,
+      "started_at": "2026-09-14T20:48:00.399Z",
+      "status": "passed",
+      "before_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+      "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T20:48:05.590Z"
+    },
+    {
+      "id": "ebaa9159-a419-497e-a332-736379ec6a6b",
+      "task": "audit-observability-dashboard",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 15896,
+      "child_pid": 18648,
+      "started_at": "2026-09-14T20:48:15.773Z",
+      "status": "passed",
+      "before_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+      "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T20:48:21.568Z"
+    },
+    {
+      "id": "466b193b-0f01-429d-90c8-850eb6eef44a",
+      "task": "audit-observability-dashboard",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 25956,
+      "child_pid": 24960,
+      "started_at": "2026-09-14T21:05:33.791Z",
+      "status": "passed",
+      "before_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+      "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T21:05:40.545Z"
     }
   ],
   "authorizations": [],
@@ -1234,13 +1441,13 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-14T19:55:06.684Z",
+    "at": "2026-09-14T21:12:49.709Z",
     "revision": {
-      "commit": "9ddc4e1d49af25d4efa1758672a41c126961a55b",
+      "commit": "2c2f372164d4186442aa149002ad20e44f37f476",
       "dirty": true,
-      "source_hash": "c05475a62d9cdc477fdde12bc151340959f77d2cf84ad420850a1f19cf511670"
+      "source_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e"
     },
-    "active_task": "audit-observability-dashboard",
+    "active_task": "security-boundaries",
     "next_action": "Run the task pre-flight."
   },
   "legacy": null

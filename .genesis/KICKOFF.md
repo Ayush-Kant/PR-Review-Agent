@@ -4,11 +4,11 @@
 
 - objective: Build a production-grade AI Pull Request Review Agent
 - phase/status: build/active
-- active task: audit-observability-dashboard — Implement the event/audit spine, operational telemetry, and repository-user-facing dashboard.
+- active task: security-boundaries — Implement prompt-injection defenses, data and secret controls, and least-privilege repository access boundaries.
 - blocker: none
 - next action: Run the task pre-flight.
 - phase instruction: Implement only the active task and prove it against current sources. Check `genesis query . impact PATH` before editing shared code.
-- gates: observability-dashboard-contract:pending, independent-review:pending
+- gates: security-boundaries-contract:pending, independent-review:pending
 - recent failures: none
 
 ## Resume
@@ -17,9 +17,9 @@ Load Genesis and official Ponytail full, then run `genesis brief .` for the curr
 Fetch full records with `genesis context . --id ID` only when needed. Do not load project.json or historical proof wholesale.
 Ask the index before reading code: `genesis query . search|scope|callers|callees|impact|path` (`--json` for parsing). Run `genesis query . impact PATH` before editing shared code. Answers are advisory static analysis; `ambiguous` means candidates were not ruled out, so confirm in source.
 Run `genesis serve .` for a live map of the repository when structure is unclear; it reindexes on save and is read-only. Run `genesis index .` if the index is stale and nothing is watching.
-Context fingerprint: 7ba8ea9fa5e35bde8a0a59eb550e09fccc68b6a96cef3543946159e6fae086c5. Use --since only after receiving that full packet; kickoff is not the packet.
+Context fingerprint: 50d85d0be76f1040b60dc48c27fbd011b07b18d019de64a3a7015e8f251e94c1. Use --since only after receiving that full packet; kickoff is not the packet.
 - KNOWLEDGE-8ddf0643: Initial architecture source
 - DECISION-29000c03: V1 platform and dashboard
-- DECISION-d1715a54: Three durable state shapes
+- DECISION-fc39ccc4: V1 tenancy and GitHub scope
 Applicable invariants, active rules, authorization and proof references are in the packet. Truncated summaries are retrieval pointers, not the full evidence.
 Reuse fresh gates with --reuse. Reconcile interrupted attempts before replaying commands. Report state → evidence → blocker → next action; checkpoint before stopping.

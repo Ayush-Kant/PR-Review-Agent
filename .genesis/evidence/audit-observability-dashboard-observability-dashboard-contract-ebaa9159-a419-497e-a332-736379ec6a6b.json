@@ -1,0 +1,30 @@
+{
+  "task": "audit-observability-dashboard",
+  "gate": "observability-dashboard-contract",
+  "kind": "command",
+  "attempt": "ebaa9159-a419-497e-a332-736379ec6a6b",
+  "command": "python -m pytest tests/test_audit_observability_dashboard.py",
+  "started_at": "2026-09-14T20:48:15.773Z",
+  "observed_at": "2026-09-14T20:48:21.568Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 20 items\r\n\r\ntests\\test_audit_observability_dashboard.py ....................         [100%]\r\n\r\n============================= 20 passed in 1.30s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "2c2f372164d4186442aa149002ad20e44f37f476",
+    "dirty": true
+  },
+  "source_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+  "before_hash": "a005c4a8eb8f3ad0662220441b61670f135722d45340519b77beeade75a5e88e",
+  "config_hash": "f9cb6c84b5da3440a83ba2b5974cf038633f485dbeb02e81948f7b24fbfa3e2e",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "1f451ecf7b591a12f6417e01eb342b863db6dbeb29bd0e84397fa80f6ee5259c"
+}

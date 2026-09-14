@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "9ddc4e1d49af25d4efa1758672a41c126961a55b",
-  "sourceHash": "afcd47abe5cb8f5ed13f1d9efe61e7db48cf8a1247f65f50ab62207a9868862d",
+  "revision": "2c2f372164d4186442aa149002ad20e44f37f476",
+  "sourceHash": "d7f15706e70e739b110a82a3915c852254612e9e81555a1ac6911c8268285997",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -40,6 +40,16 @@
       "contentHash": "f01d4eb83d92bd16b67f6bbce175b390ea40fb060820e3fd65e78d9594efe8aa"
     },
     {
+      "id": "file:pr_review_agent/observability.py",
+      "type": "file",
+      "label": "pr_review_agent/observability.py",
+      "path": "pr_review_agent/observability.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "79fe025c582d943e070da4fd3480315cdecb3464552e6feb6a205df0f1565bfd"
+    },
+    {
       "id": "file:pr_review_agent/orchestration.py",
       "type": "file",
       "label": "pr_review_agent/orchestration.py",
@@ -70,6 +80,16 @@
       "contentHash": "ec4d2bc1314e70313fcee2fd69db1ad9f268cd0e9ea361bb4d01b8785be75f22"
     },
     {
+      "id": "file:tests/test_audit_observability_dashboard.py",
+      "type": "file",
+      "label": "tests/test_audit_observability_dashboard.py",
+      "path": "tests/test_audit_observability_dashboard.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "8662b921a3956b4329708feb7a973be108cfbc1de7575cc568076f1d44afb5ce"
+    },
+    {
       "id": "file:tests/test_finding_policy_and_hitl.py",
       "type": "file",
       "label": "tests/test_finding_policy_and_hitl.py",
@@ -87,7 +107,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "b7a88802ec5d8a6b8ede99ec2815e06819df8a9824ee924fc71715075103a31e"
+      "contentHash": "b0e8795cfcabca7039048d54ba0485a5f3c972219530b9703b81ae311051eb4d"
     },
     {
       "id": "file:tests/test_retrieval_and_findings.py",

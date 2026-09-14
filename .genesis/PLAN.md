@@ -50,15 +50,15 @@
 
 ### audit-observability-dashboard — Implement the event/audit spine, operational telemetry, and repository-user-facing dashboard.
 
-- state/risk: active / medium
+- state/risk: done / medium
 - requirements: FR-15, FR-17, AC-11, AC-15, NFR-06, NFR-08, NFR-10, NFR-11
 - scope: not bounded
-- gates: observability-dashboard-contract: python -m pytest tests/test_audit_observability_dashboard.py, independent-review: pending
+- gates: observability-dashboard-contract: python -m pytest tests/test_audit_observability_dashboard.py, independent-review: pass
 - next: Run the task pre-flight.
 
 ### security-boundaries — Implement prompt-injection defenses, data and secret controls, and least-privilege repository access boundaries.
 
-- state/risk: queued / medium
+- state/risk: active / medium
 - requirements: FR-18, AC-02, AC-14, NFR-02, NFR-07
 - scope: not bounded
 - gates: security-boundaries-contract: python -m pytest tests/test_security_boundaries.py, independent-review: pending

@@ -4,9 +4,11 @@ digraph genesis {
   "file:pr_review_agent/__init__.py" [label="pr_review_agent/__init__.py",class="file"];
   "file:pr_review_agent/github_output.py" [label="pr_review_agent/github_output.py",class="file"];
   "file:pr_review_agent/intake.py" [label="pr_review_agent/intake.py",class="file"];
+  "file:pr_review_agent/observability.py" [label="pr_review_agent/observability.py",class="file"];
   "file:pr_review_agent/orchestration.py" [label="pr_review_agent/orchestration.py",class="file"];
   "file:pr_review_agent/policy.py" [label="pr_review_agent/policy.py",class="file"];
   "file:pr_review_agent/retrieval.py" [label="pr_review_agent/retrieval.py",class="file"];
+  "file:tests/test_audit_observability_dashboard.py" [label="tests/test_audit_observability_dashboard.py",class="file"];
   "file:tests/test_finding_policy_and_hitl.py" [label="tests/test_finding_policy_and_hitl.py",class="file"];
   "file:tests/test_github_review_output.py" [label="tests/test_github_review_output.py",class="file"];
   "file:tests/test_retrieval_and_findings.py" [label="tests/test_retrieval_and_findings.py",class="file"];
