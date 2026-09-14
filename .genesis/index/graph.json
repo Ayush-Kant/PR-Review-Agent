@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "86274b13e4150c6a5cb42ab53f54ff6394f2fa65",
-  "sourceHash": "cf22ca96f02656e834c81160f09209808dca2f99d049e32425e09cbda3fef1c8",
+  "revision": "67ccc234ac47ad9cc7945e955445dad88940e833",
+  "sourceHash": "d94969e9500b5d283983c3f153e640be533dfae9070aa60ba6a486c3636dbca8",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -40,6 +40,16 @@
       "contentHash": "7f94e5b91e4194f71391886e1b70027a9a8d3999b6f431bef9520a3df4112fbc"
     },
     {
+      "id": "file:pr_review_agent/policy.py",
+      "type": "file",
+      "label": "pr_review_agent/policy.py",
+      "path": "pr_review_agent/policy.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "334e368b6a14fd1536336aea959fcaf67d6bd369c73170c1533e5cf7df79094f"
+    },
+    {
       "id": "file:pr_review_agent/retrieval.py",
       "type": "file",
       "label": "pr_review_agent/retrieval.py",
@@ -48,6 +58,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "ec4d2bc1314e70313fcee2fd69db1ad9f268cd0e9ea361bb4d01b8785be75f22"
+    },
+    {
+      "id": "file:tests/test_finding_policy_and_hitl.py",
+      "type": "file",
+      "label": "tests/test_finding_policy_and_hitl.py",
+      "path": "tests/test_finding_policy_and_hitl.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "f24df9b821f0a5db6bcfdf834a9482723cc4b4fe1263776ebd2b9b8ec0b0ee7b"
     },
     {
       "id": "file:tests/test_retrieval_and_findings.py",

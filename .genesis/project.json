@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-14T18:09:24.450Z"
+    "updated_at": "2026-09-14T19:14:59.176Z"
   },
   "policy": {
     "ponytail": "full",
@@ -25,7 +25,7 @@
   "lifecycle": {
     "phase": "build",
     "status": "active",
-    "active_task": "finding-policy-hitl",
+    "active_task": "github-review-output",
     "blocker": null,
     "next_action": "Run the task pre-flight."
   },
@@ -531,7 +531,7 @@
     {
       "id": "finding-policy-hitl",
       "outcome": "Implement finding aggregation, deduplication, confidence/risk policy, review truth, and maintainer HITL workflow.",
-      "state": "active",
+      "state": "done",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -557,16 +557,28 @@
           "kind": "command",
           "command": "python -m pytest tests/test_finding_policy_and_hitl.py",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/finding-policy-hitl-finding-policy-contract-92b12150-a27f-454b-976b-0f86ae0d9ef5.json",
+            "hash": "5e90f8b9a661b6f059c01d5b51fc7cf7b5ad7a682ac21fab3b40dabdd4fe98f5",
+            "source_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7",
+            "config_hash": "039ec5509ae1fdeb8f0c0963873639c470e8d743b5d80484d35f12e55e3fcdf6",
+            "observed_at": "2026-09-14T19:05:11.442Z"
+          }
         },
         {
           "id": "independent-review",
           "kind": "review",
           "command": "",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/finding-policy-hitl-independent-review-f9f659fa-3f13-4c22-888e-21e033be941a.json",
+            "hash": "a37739e0e5229cf78d68f78747885e8391283e40bdf1002e9c8add96477a9673",
+            "source_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7",
+            "config_hash": "039ec5509ae1fdeb8f0c0963873639c470e8d743b5d80484d35f12e55e3fcdf6",
+            "observed_at": "2026-09-14T19:14:14.065Z"
+          }
         }
       ],
       "next_action": "Run the task pre-flight.",
@@ -575,7 +587,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:02.313Z",
-      "updated_at": "2026-09-14T15:30:02.314Z",
+      "updated_at": "2026-09-14T19:14:37.175Z",
       "base_manifest": {
         ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
         "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
@@ -592,7 +604,7 @@
     {
       "id": "github-review-output",
       "outcome": "Implement policy-permitted, current-SHA-safe, idempotent GitHub reviews and inline findings.",
-      "state": "queued",
+      "state": "active",
       "risk": "medium",
       "owner": null,
       "scope": [],
@@ -631,7 +643,21 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T15:30:03.185Z",
-      "updated_at": "2026-09-14T15:30:03.186Z"
+      "updated_at": "2026-09-14T15:30:03.186Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/orchestration.py": "885f6eecafdfd7a124356ab89b9b9ed487df1fd494fcc745d8823afec264ca5c",
+        "pr_review_agent/policy.py": "a4d31f4cf3a1bdff3851407edf6ecf0425e75d4dcae9081c7582a0d64dcdfa52",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "tests/test_finding_policy_and_hitl.py": "ada104191955a41a87c1579603598d8127dd89fdb61ab333e7090f2c0f0c0606",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     },
     {
       "id": "audit-observability-dashboard",
@@ -840,6 +866,15 @@
       "task": "retrieval-findings",
       "human": "Ayush Kant",
       "reason": "Reviewed the corrected retrieval-findings implementation. Evidence line ranges are verified, diff file matching is exact, token capping is strict, 14 retrieval tests plus 5 intake and 11 orchestration regression tests pass, and the Genesis executable gate passes.",
+      "revision": null
+    },
+    {
+      "id": "f9f659fa-3f13-4c22-888e-21e033be941a",
+      "at": "2026-09-14T19:14:14.065Z",
+      "action": "approve",
+      "task": "finding-policy-hitl",
+      "human": "Ayush Kant",
+      "reason": "Reviewed implementation, tests, fail-closed policy, Review Truth lifecycle, HITL authorization, scope, and Genesis bookkeeping; approved.",
       "revision": null
     }
   ],
@@ -1059,6 +1094,54 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-14T18:01:58.509Z"
+    },
+    {
+      "id": "5aadfe00-1501-49bf-8f13-e7bcebb0ceb1",
+      "task": "finding-policy-hitl",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_finding_policy_and_hitl.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 25088,
+      "child_pid": 25856,
+      "started_at": "2026-09-14T18:56:31.283Z",
+      "status": "passed",
+      "before_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7",
+      "config_hash": "039ec5509ae1fdeb8f0c0963873639c470e8d743b5d80484d35f12e55e3fcdf6",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T18:56:41.889Z"
+    },
+    {
+      "id": "92b12150-a27f-454b-976b-0f86ae0d9ef5",
+      "task": "finding-policy-hitl",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_finding_policy_and_hitl.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 26320,
+      "child_pid": 2256,
+      "started_at": "2026-09-14T19:05:05.744Z",
+      "status": "passed",
+      "before_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7",
+      "config_hash": "039ec5509ae1fdeb8f0c0963873639c470e8d743b5d80484d35f12e55e3fcdf6",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-14T19:05:11.442Z"
     }
   ],
   "authorizations": [],
@@ -1066,13 +1149,13 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-14T18:09:23.781Z",
+    "at": "2026-09-14T19:14:58.860Z",
     "revision": {
-      "commit": "86274b13e4150c6a5cb42ab53f54ff6394f2fa65",
+      "commit": "67ccc234ac47ad9cc7945e955445dad88940e833",
       "dirty": true,
-      "source_hash": "5450286ad6b4ca54e6071c58eb55d0dc984744a0dd41d95397581adb04695ea1"
+      "source_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7"
     },
-    "active_task": "finding-policy-hitl",
+    "active_task": "github-review-output",
     "next_action": "Run the task pre-flight."
   },
   "legacy": null

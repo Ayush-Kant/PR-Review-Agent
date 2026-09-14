@@ -34,15 +34,15 @@
 
 ### finding-policy-hitl — Implement finding aggregation, deduplication, confidence/risk policy, review truth, and maintainer HITL workflow.
 
-- state/risk: active / medium
+- state/risk: done / medium
 - requirements: FR-09, FR-10, FR-11, FR-14, AC-06, AC-07, AC-11, NFR-01, NFR-06, NFR-10
 - scope: not bounded
-- gates: finding-policy-contract: python -m pytest tests/test_finding_policy_and_hitl.py, independent-review: pending
+- gates: finding-policy-contract: python -m pytest tests/test_finding_policy_and_hitl.py, independent-review: pass
 - next: Run the task pre-flight.
 
 ### github-review-output — Implement policy-permitted, current-SHA-safe, idempotent GitHub reviews and inline findings.
 
-- state/risk: queued / medium
+- state/risk: active / medium
 - requirements: FR-12, AC-08, AC-09, NFR-02, NFR-03
 - scope: not bounded
 - gates: github-output-contract: python -m pytest tests/test_github_review_output.py, independent-review: pending

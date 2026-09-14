@@ -1,0 +1,30 @@
+{
+  "task": "finding-policy-hitl",
+  "gate": "finding-policy-contract",
+  "kind": "command",
+  "attempt": "92b12150-a27f-454b-976b-0f86ae0d9ef5",
+  "command": "python -m pytest tests/test_finding_policy_and_hitl.py",
+  "started_at": "2026-09-14T19:05:05.744Z",
+  "observed_at": "2026-09-14T19:05:11.442Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 15 items\r\n\r\ntests\\test_finding_policy_and_hitl.py ...............                    [100%]\r\n\r\n============================= 15 passed in 1.36s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "67ccc234ac47ad9cc7945e955445dad88940e833",
+    "dirty": true
+  },
+  "source_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7",
+  "before_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7",
+  "config_hash": "039ec5509ae1fdeb8f0c0963873639c470e8d743b5d80484d35f12e55e3fcdf6",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "5e90f8b9a661b6f059c01d5b51fc7cf7b5ad7a682ac21fab3b40dabdd4fe98f5"
+}

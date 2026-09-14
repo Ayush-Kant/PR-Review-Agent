@@ -4,11 +4,11 @@
 
 - objective: Build a production-grade AI Pull Request Review Agent
 - phase/status: build/active
-- active task: finding-policy-hitl — Implement finding aggregation, deduplication, confidence/risk policy, review truth, and maintainer HITL workflow.
+- active task: github-review-output — Implement policy-permitted, current-SHA-safe, idempotent GitHub reviews and inline findings.
 - blocker: none
 - next action: Run the task pre-flight.
 - phase instruction: Implement only the active task and prove it against current sources. Check `genesis query . impact PATH` before editing shared code.
-- gates: finding-policy-contract:pending, independent-review:pending
+- gates: github-output-contract:pending, independent-review:pending
 - recent failures: none
 
 ## Resume
@@ -17,9 +17,9 @@ Load Genesis and official Ponytail full, then run `genesis brief .` for the curr
 Fetch full records with `genesis context . --id ID` only when needed. Do not load project.json or historical proof wholesale.
 Ask the index before reading code: `genesis query . search|scope|callers|callees|impact|path` (`--json` for parsing). Run `genesis query . impact PATH` before editing shared code. Answers are advisory static analysis; `ambiguous` means candidates were not ruled out, so confirm in source.
 Run `genesis serve .` for a live map of the repository when structure is unclear; it reindexes on save and is read-only. Run `genesis index .` if the index is stale and nothing is watching.
-Context fingerprint: 795f84614bc4a27108d0368228258a6b34b907818c720586b6efa2ae9eec7f9a. Use --since only after receiving that full packet; kickoff is not the packet.
+Context fingerprint: a62450c4fe22254dccba8a73fda155e0e08e3a0cfb8305809bc7fbe3956f6da7. Use --since only after receiving that full packet; kickoff is not the packet.
 - KNOWLEDGE-8ddf0643: Initial architecture source
-- DECISION-d1715a54: Three durable state shapes
+- DECISION-fc39ccc4: V1 tenancy and GitHub scope
 - DECISION-cf2aec81: V1 publication and automation policy
 Applicable invariants, active rules, authorization and proof references are in the packet. Truncated summaries are retrieval pointers, not the full evidence.
 Reuse fresh gates with --reuse. Reconcile interrupted attempts before replaying commands. Report state → evidence → blocker → next action; checkpoint before stopping.

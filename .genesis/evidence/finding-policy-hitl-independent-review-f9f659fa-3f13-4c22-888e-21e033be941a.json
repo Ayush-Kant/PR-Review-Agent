@@ -1,0 +1,13 @@
+{
+  "task": "finding-policy-hitl",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "f9f659fa-3f13-4c22-888e-21e033be941a",
+  "human": "Ayush Kant",
+  "reason": "Reviewed implementation, tests, fail-closed policy, Review Truth lifecycle, HITL authorization, scope, and Genesis bookkeeping; approved.",
+  "observed_at": "2026-09-14T19:14:14.065Z",
+  "source_hash": "6d6a13d514203d067a69d5c33aa6a8c769812a87ee4bcebb1add4afdcb6e50d7",
+  "config_hash": "039ec5509ae1fdeb8f0c0963873639c470e8d743b5d80484d35f12e55e3fcdf6",
+  "reviewed_proofs": "0f0a1b18ba94f89ea9c47d3ebd9745dece3cf5263485eeb115f8746ecfa4cb9f",
+  "hash": "a37739e0e5229cf78d68f78747885e8391283e40bdf1002e9c8add96477a9673"
+}
