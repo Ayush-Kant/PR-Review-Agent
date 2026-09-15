@@ -111,9 +111,15 @@ def run_live_review() -> int:
             pricing_registry=pricing,
         )
 
-        # Run Security and Quality specialist evaluations
+        # Run all four specialist evaluations: Security, Quality, Tests, Documentation
         all_candidate_findings = []
-        for spec_type in (SpecialistType.SECURITY, SpecialistType.QUALITY):
+        all_specialist_types = (
+            SpecialistType.SECURITY,
+            SpecialistType.QUALITY,
+            SpecialistType.TESTS,
+            SpecialistType.DOCUMENTATION,
+        )
+        for spec_type in all_specialist_types:
             print(f"[*] Running {spec_type.value.upper()} specialist...")
             spec_input = SpecialistInput(
                 specialist_type=spec_type,
@@ -175,7 +181,8 @@ def run_live_review() -> int:
         return 0
 
     finally:
-        github_client.close()
+        if hasattr(github_client, "close"):
+            github_client.close()
 
 
 if __name__ == "__main__":

@@ -607,3 +607,63 @@ async def test_worker_run_loop_stop_conditions() -> None:
     assert iterations2 == 0
 
     worker.close()
+
+
+# ---------------------------------------------------------------------------
+# 5. Live Review Harness Multi-Specialist and Safety Tests
+# ---------------------------------------------------------------------------
+
+def test_live_pr_review_harness_runs_all_four_specialists(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scripts.live_pr_review import run_live_review
+
+    # 1. Safety check: when ENABLE_LIVE_GITHUB_TEST is not set, exits early with 0
+    monkeypatch.delenv("ENABLE_LIVE_GITHUB_TEST", raising=False)
+    assert run_live_review() == 0
+
+    # 2. When opted-in, verify it executes all four specialists: SECURITY, QUALITY, TESTS, DOCUMENTATION
+    monkeypatch.setenv("ENABLE_LIVE_GITHUB_TEST", "1")
+    monkeypatch.setenv("PUBLISH_LIVE_REVIEW", "0")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_fake123456789012345678901234567890")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "octocat/hello-world")
+    monkeypatch.setenv("GITHUB_PR_NUMBER", "42")
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-fake12345678901234567890")
+
+    mock_gh = FakeGitHubClient()
+    mock_gh.set_head_sha("octocat/hello-world", 42, "headsha123")
+    mock_gh.get_pull_request = lambda repo, pr: {  # type: ignore[assignment]
+        "head": {"sha": "headsha123"},
+        "base": {"sha": "basesha123"},
+        "title": "Test PR",
+    }
+    mock_gh.get_pull_request_diff = lambda repo, pr: "diff --git a/foo.py b/foo.py\n..."  # type: ignore[assignment]
+
+    executed_specialists: list[SpecialistType] = []
+
+    class MockAdapter:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __call__(self, spec_input: SpecialistInput) -> SpecialistOutput:
+            executed_specialists.append(spec_input.specialist_type)
+            return SpecialistOutput(
+                specialist_type=spec_input.specialist_type,
+                correlation_id=spec_input.correlation_id,
+                status="completed",
+                findings=(),
+            )
+
+    monkeypatch.setattr("scripts.live_pr_review.GitHubNetworkClient", lambda sec_config: mock_gh)
+    monkeypatch.setattr("scripts.live_pr_review.LLMSpecialistAdapter", MockAdapter)
+
+    ret = run_live_review()
+    assert ret == 0
+    assert executed_specialists == [
+        SpecialistType.SECURITY,
+        SpecialistType.QUALITY,
+        SpecialistType.TESTS,
+        SpecialistType.DOCUMENTATION,
+    ]
+    # Dry-run safety: verify 0 reviews or comments published
+    assert len(mock_gh.reviews) == 0
+    assert len(mock_gh.comments) == 0
