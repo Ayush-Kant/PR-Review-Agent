@@ -1,0 +1,30 @@
+{
+  "task": "review-hardening",
+  "gate": "contract",
+  "kind": "command",
+  "attempt": "fdead6a6-1625-4cea-bbe5-8719e0444a56",
+  "command": "python -m pytest tests/test_finding_policy_and_hitl.py tests/test_live_pr_validation.py",
+  "started_at": "2026-09-15T20:46:00.131Z",
+  "observed_at": "2026-09-15T20:46:08.069Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 32 items\r\n\r\ntests\\test_finding_policy_and_hitl.py ...................                [ 59%]\r\ntests\\test_live_pr_validation.py .............                           [100%]\r\n\r\n============================= 32 passed in 2.06s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "8dee00e1d0afc10ea44d4561f10d02488dc88f4d",
+    "dirty": true
+  },
+  "source_hash": "5af3a1f84ada420fa5e33e930025bfcac2d6c7a796eb3a035f974e488e4a7f7a",
+  "before_hash": "5af3a1f84ada420fa5e33e930025bfcac2d6c7a796eb3a035f974e488e4a7f7a",
+  "config_hash": "798bd6fb1d1617e11ddf1560719984278e16865da9caefab6697b0b0ccc70a23",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "e92e4ef394b4bf0ae95ac88d865d86b79c8d36518cf90d17ef5da6efb45be382"
+}

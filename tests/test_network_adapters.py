@@ -461,6 +461,177 @@ class TestLLMProviderAdapters(unittest.TestCase):
 
         adapter.close()
 
+    def test_security_specialist_prompt_includes_calibrated_guidelines(self) -> None:
+        """Verify security specialist system prompt includes context-sensitive calibration."""
+        captured_request = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured_request["body"] = json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": json.dumps({"findings": []})}}],
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110},
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        adapter = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.security_config,
+            model="gpt-4o",
+            transport=transport,
+            pricing_registry=self.pricing,
+        )
+
+        spec_input = SpecialistInput(
+            specialist_type=SpecialistType.SECURITY,
+            correlation_id="corr-sec-calib",
+            instructions="Audit for security defects",
+            changed_files=("util.py",),
+            diff_content="+ run_id = random.choice(['a', 'b'])",
+            retrieved_evidence=(),
+            head_sha="head111",
+        )
+
+        adapter(spec_input)
+        system_msg = captured_request["body"]["messages"][0]["content"]
+
+        self.assertIn("Security Evaluation Calibration:", system_msg)
+        self.assertIn("Generic use of random, non-cryptographic hashing, or debug logging is NOT automatically a security vulnerability", system_msg)
+        self.assertIn("authentication secrets, password reset tokens, session identifiers, CSRF tokens", system_msg)
+        self.assertIn("benign identifier, demo/test value, display value, sampling, non-security ID", system_msg)
+        self.assertIn("Never suppress a genuine security issue when surrounding code/evidence establishes security-sensitive use", system_msg)
+        adapter.close()
+
+    def test_security_specialist_benign_randomness_produces_no_security_vulnerability(self) -> None:
+        """Calibrated security specialist does not produce a security vulnerability for benign random choice."""
+        model_payload = {"findings": []}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": json.dumps(model_payload)}}],
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110},
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        adapter = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.security_config,
+            model="gpt-4o",
+            transport=transport,
+            pricing_registry=self.pricing,
+        )
+
+        spec_input = SpecialistInput(
+            specialist_type=SpecialistType.SECURITY,
+            correlation_id="corr-sec-benign",
+            instructions="Audit for security defects",
+            changed_files=("util.py",),
+            diff_content="+ def get_color(): return random.choice(['red', 'green', 'blue'])",
+            retrieved_evidence=(),
+            head_sha="head111",
+        )
+
+        output = adapter(spec_input)
+        self.assertEqual(output.status, "completed")
+        self.assertEqual(len(output.findings), 0)
+        adapter.close()
+
+    def test_security_specialist_sensitive_token_randomness_produces_security_finding(self) -> None:
+        """Calibrated security specialist still detects non-cryptographic randomness for security-sensitive tokens."""
+        model_payload = {
+            "findings": [
+                {
+                    "category": "security_vulnerability",
+                    "severity": "high",
+                    "confidence": 0.95,
+                    "summary": "Insecure random generator used for password reset token",
+                    "rationale": "random.choice used to generate secret password reset token on line 45",
+                    "file_path": "auth/tokens.py",
+                    "line_range": [45, 45],
+                    "evidence_refs": ["auth/tokens.py#L45"],
+                    "remediation": "Use secrets.token_urlsafe or secrets.choice for cryptographic security",
+                }
+            ]
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": json.dumps(model_payload)}}],
+                    "usage": {"prompt_tokens": 150, "completion_tokens": 60, "total_tokens": 210},
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        adapter = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.security_config,
+            model="gpt-4o",
+            transport=transport,
+            pricing_registry=self.pricing,
+        )
+
+        spec_input = SpecialistInput(
+            specialist_type=SpecialistType.SECURITY,
+            correlation_id="corr-sec-sensitive",
+            instructions="Audit for security defects",
+            changed_files=("auth/tokens.py",),
+            diff_content="+ def generate_reset_token(): return ''.join(random.choice(chars) for _ in range(32))",
+            retrieved_evidence=(),
+            head_sha="head111",
+        )
+
+        output = adapter(spec_input)
+        self.assertEqual(output.status, "completed")
+        self.assertEqual(len(output.findings), 1)
+        finding = output.findings[0]
+        self.assertEqual(finding.specialist_type, SpecialistType.SECURITY)
+        self.assertEqual(finding.severity, "high")
+        self.assertIn("password reset token", finding.summary)
+        adapter.close()
+
+    def test_security_specialist_ambiguous_context_omits_unsupported_claim(self) -> None:
+        """Ambiguous context without security-sensitive evidence does not produce a high-severity finding."""
+        model_payload = {"findings": []}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": json.dumps(model_payload)}}],
+                    "usage": {"prompt_tokens": 120, "completion_tokens": 10, "total_tokens": 130},
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        adapter = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.security_config,
+            model="gpt-4o",
+            transport=transport,
+            pricing_registry=self.pricing,
+        )
+
+        spec_input = SpecialistInput(
+            specialist_type=SpecialistType.SECURITY,
+            correlation_id="corr-sec-ambig",
+            instructions="Audit for security defects",
+            changed_files=("service.py",),
+            diff_content="+ sample = random.choice(items)",
+            retrieved_evidence=(),
+            head_sha="head111",
+        )
+
+        output = adapter(spec_input)
+        self.assertEqual(len(output.findings), 0)
+        adapter.close()
+
     def test_groq_adapter_execution(self) -> None:
         """Verify Groq specialist handler request construction and role handling."""
         model_payload = {

@@ -134,9 +134,23 @@ class LLMSpecialistAdapter:
             retrieved_evidence=spec_input.retrieved_evidence,
         )
 
+        security_guidelines = ""
+        if spec_input.specialist_type == SpecialistType.SECURITY or specialist_role.lower() == "security":
+            security_guidelines = (
+                "\nSecurity Evaluation Calibration:\n"
+                "- Generic use of random, non-cryptographic hashing, or debug logging is NOT automatically a security vulnerability.\n"
+                "- A security finding requires evidence that the behavior is security-sensitive in context.\n"
+                "- For randomness specifically, classify it as a security issue only when the code path is used for something security-sensitive such as:\n"
+                "  authentication secrets, password reset tokens, session identifiers, CSRF tokens, cryptographic material, authorization/security tokens, or other explicitly security-sensitive values.\n"
+                "- If the code is clearly using randomness for a benign identifier, demo/test value, display value, sampling, non-security ID, etc., do not emit a high/medium security vulnerability finding merely because the API is non-cryptographic.\n"
+                "- When the context is ambiguous, prefer omission or a lower-severity informational/quality observation rather than an unsupported security claim.\n"
+                "- Never suppress a genuine security issue when surrounding code/evidence establishes security-sensitive use.\n"
+            )
+
         system_prompt = (
             f"You are a specialist code review agent focusing exclusively on {specialist_role.upper()}.\n"
-            f"Instructions:\n{spec_input.instructions}\n\n"
+            f"Instructions:\n{spec_input.instructions}\n"
+            f"{security_guidelines}\n"
             "Output Requirement:\n"
             "You MUST respond ONLY with a valid JSON object adhering to the following schema:\n"
             "{\n"

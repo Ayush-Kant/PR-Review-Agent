@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-15T17:27:03.477Z
+- plan approval: Developer at 2026-09-15T20:20:50.582Z
 
 ## Tasks
 
@@ -94,5 +94,13 @@
 - requirements: FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-12, FR-15, FR-18, FR-19
 - scope: not bounded
 - gates: validation-contract: python -m pytest tests/test_live_pr_validation.py, independent-review: pass
+- next: Run the task pre-flight.
+
+### review-hardening — Harden finding deduplication, security finding precision, and standalone harness publication idempotency
+
+- state/risk: done / medium
+- requirements: FR-09
+- scope: not bounded
+- gates: contract: python -m pytest tests/test_finding_policy_and_hitl.py tests/test_live_pr_validation.py, independent-review: pass
 - next: Run the task pre-flight.
 

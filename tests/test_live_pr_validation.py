@@ -6,6 +6,8 @@ import asyncio
 import hashlib
 import hmac
 import json
+import os
+from pathlib import Path
 import sqlite3
 import time
 from typing import Any
@@ -32,6 +34,7 @@ from pr_review_agent.orchestration import (
     SpecialistType,
 )
 from pr_review_agent.policy import (
+    CanonicalFinding,
     FindingAggregator,
     FindingDisposition,
     ReviewPolicyEngine,
@@ -613,7 +616,7 @@ async def test_worker_run_loop_stop_conditions() -> None:
 # 5. Live Review Harness Multi-Specialist and Safety Tests
 # ---------------------------------------------------------------------------
 
-def test_live_pr_review_harness_runs_all_four_specialists(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_live_pr_review_harness_runs_all_four_specialists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from scripts.live_pr_review import run_live_review
 
     # 1. Safety check: when ENABLE_LIVE_GITHUB_TEST is not set, exits early with 0
@@ -628,6 +631,8 @@ def test_live_pr_review_harness_runs_all_four_specialists(monkeypatch: pytest.Mo
     monkeypatch.setenv("GITHUB_PR_NUMBER", "42")
     monkeypatch.setenv("MODEL_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-fake12345678901234567890")
+
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "cli_test.db"))
 
     mock_gh = FakeGitHubClient()
     mock_gh.set_head_sha("octocat/hello-world", 42, "headsha123")
@@ -667,3 +672,114 @@ def test_live_pr_review_harness_runs_all_four_specialists(monkeypatch: pytest.Mo
     # Dry-run safety: verify 0 reviews or comments published
     assert len(mock_gh.reviews) == 0
     assert len(mock_gh.comments) == 0
+
+
+def test_cross_process_publication_idempotency_via_durable_sqlite(tmp_path: Path) -> None:
+    """Offline test demonstrating cross-process persistence and idempotency across separate processes."""
+    db_file = str(tmp_path / "durable_harness_test.db")
+    diff_content = "diff --git a/src/service.py b/src/service.py\n+ def foo(): pass"
+
+    finding = CanonicalFinding(
+        canonical_id="can-durable-idemp-1",
+        repository_id="octocat/hello-world",
+        head_sha="head123",
+        category="quality",
+        severity="low",
+        confidence=0.92,
+        summary="Code quality observation",
+        rationale="Detailed observation",
+        file_path="src/service.py",
+        line_range=(1, 1),
+        contributing_candidate_ids=("cand-1",),
+        contributing_specialists=("quality",),
+        evidence_refs=("diff://src/service.py#L1",),
+        remediation="Clean up syntax",
+        merge_rationale="Merged 1 finding",
+        delivery_id="deliv-1",
+        run_id="run-1",
+    )
+
+    # Process / Run #1:
+    conn1 = sqlite3.connect(db_file)
+    truth_store1 = ReviewTruthStore(conn1)
+    truth_store1.record_initial(finding, initial_state=TruthState.AUTO_APPROVED)
+
+    mock_gh_1 = FakeGitHubClient()
+    mock_gh_1.set_head_sha("octocat/hello-world", 42, "head123")
+    publisher1 = GitHubReviewPublisher(conn1, truth_store1, mock_gh_1)
+
+    res1 = publisher1.publish_finding(finding, pull_number=42, diff_content=diff_content)
+    assert res1.status == PublicationStatus.PUBLISHED
+    assert len(mock_gh_1.reviews) + len(mock_gh_1.comments) == 1
+    conn1.commit()
+    conn1.close()
+
+    # Process / Run #2: completely separate connection opening the same database file
+    conn2 = sqlite3.connect(db_file)
+    truth_store2 = ReviewTruthStore(conn2)
+    mock_gh_2 = FakeGitHubClient()
+    mock_gh_2.set_head_sha("octocat/hello-world", 42, "head123")
+    publisher2 = GitHubReviewPublisher(conn2, truth_store2, mock_gh_2)
+
+    # Attempt to republish the same finding
+    res2 = publisher2.publish_finding(finding, pull_number=42, diff_content=diff_content)
+    assert res2.status == PublicationStatus.ALREADY_PUBLISHED
+    # Verify no duplicate network/API publication performed!
+    assert len(mock_gh_2.reviews) == 0
+    assert len(mock_gh_2.comments) == 0
+
+    # Verify Review Truth state remained PUBLISHED
+    latest = truth_store2.get_latest_state(finding.canonical_id)
+    assert latest is not None
+    assert latest.state == TruthState.PUBLISHED
+
+    conn2.close()
+
+
+def test_live_harness_uses_configured_database_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify scripts.live_pr_review uses configured DATABASE_PATH rather than :memory:."""
+    from scripts.live_pr_review import run_live_review
+
+    test_db = str(tmp_path / "custom_harness.db")
+    monkeypatch.setenv("ENABLE_LIVE_GITHUB_TEST", "1")
+    monkeypatch.setenv("PUBLISH_LIVE_REVIEW", "0")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_fake123456789012345678901234567890")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "octocat/hello-world")
+    monkeypatch.setenv("GITHUB_PR_NUMBER", "42")
+    monkeypatch.setenv("MODEL_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-fake12345678901234567890")
+    monkeypatch.setenv("DATABASE_PATH", test_db)
+
+    mock_gh = FakeGitHubClient()
+    mock_gh.set_head_sha("octocat/hello-world", 42, "headsha123")
+    mock_gh.get_pull_request = lambda repo, pr: {  # type: ignore[assignment]
+        "head": {"sha": "headsha123"},
+        "base": {"sha": "basesha123"},
+        "title": "Test PR",
+    }
+    mock_gh.get_pull_request_diff = lambda repo, pr: "diff --git a/foo.py b/foo.py\n..."  # type: ignore[assignment]
+
+    class MockAdapter:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __call__(self, spec_input: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=spec_input.specialist_type,
+                correlation_id=spec_input.correlation_id,
+                status="completed",
+                findings=(),
+            )
+
+    monkeypatch.setattr("scripts.live_pr_review.GitHubNetworkClient", lambda sec_config: mock_gh)
+    monkeypatch.setattr("scripts.live_pr_review.LLMSpecialistAdapter", MockAdapter)
+
+    ret = run_live_review()
+    assert ret == 0
+    # Verify the database file was created on disk
+    assert os.path.exists(test_db)
+    # Verify review_truth table exists in the file
+    check_conn = sqlite3.connect(test_db)
+    row = check_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='review_truth'").fetchone()
+    assert row is not None
+    check_conn.close()

@@ -1,0 +1,13 @@
+{
+  "task": "review-hardening",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "0a91b3c8-9c4c-4758-9f8f-18c4d0910413",
+  "human": "Ayush Kant",
+  "reason": "Validated semantic finding deduplication, deterministic canonical IDs, security prompt calibration, and durable SQLite publication idempotency with 190 passing tests",
+  "observed_at": "2026-09-15T20:46:39.006Z",
+  "source_hash": "5af3a1f84ada420fa5e33e930025bfcac2d6c7a796eb3a035f974e488e4a7f7a",
+  "config_hash": "798bd6fb1d1617e11ddf1560719984278e16865da9caefab6697b0b0ccc70a23",
+  "reviewed_proofs": "33ae69a79e808f4a583e372c7a4a189c1b8cca56a1cea3c038f7c81264bcb014",
+  "hash": "26cbdeceb2146bf31537371d4f64927fd3ce8abf989379b16e898ace05da6356"
+}

@@ -777,3 +777,180 @@ def test_no_github_publication_side_effects_occur() -> None:
     # Maintainer actions also do not trigger external calls
     disp = workflow.dispute(evaluated.canonical_id, actor="maintainer1", actor_role="maintainer", rationale="Investigating")
     assert disp.state == TruthState.DISPUTED
+
+
+def test_different_raw_categories_same_mutable_default_defect_merge() -> None:
+    """Findings with different raw categories (defect vs code_smell) for mutable default merge."""
+    aggregator = FindingAggregator()
+    cand1 = _make_candidate(
+        "cand-def-1",
+        file_path="examples/report.py",
+        line_range=(17, 20),
+        category="defect",
+        severity="medium",
+        confidence=0.85,
+        specialist_type=SpecialistType.QUALITY,
+        evidence_refs=("diff://examples/report.py#L17-L20",),
+    )
+    cand1 = CandidateFinding(
+        finding_id="cand-def-1",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="defect",
+        severity="medium",
+        confidence=0.85,
+        summary="Mutable default argument in format_report leads to state leakage across calls",
+        rationale="Default parameter is initialized once at definition time.",
+        file_path="examples/report.py",
+        line_range=(17, 20),
+        evidence_refs=("diff://examples/report.py#L17-L20",),
+        remediation="Use None as default and initialize inside function.",
+    )
+    cand2 = CandidateFinding(
+        finding_id="cand-smell-2",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="code_smell",
+        severity="medium",
+        confidence=0.88,
+        summary="format_report() uses a mutable default argument",
+        rationale="Mutable default argument dictionary shared across invocations.",
+        file_path="examples/report.py",
+        line_range=(18, 21),
+        evidence_refs=("diff://examples/report.py#L18-L21",),
+        remediation="Replace with None sentinel.",
+    )
+
+    canonical = aggregator.aggregate(
+        [cand1, cand2],
+        repository_id="Ayush-Kant/PR-Review-Agent",
+        head_sha="head123",
+    )
+
+    assert len(canonical) == 1
+    c = canonical[0]
+    assert c.file_path == "examples/report.py"
+    assert c.line_range == (17, 21)
+    assert set(c.contributing_candidate_ids) == {"cand-def-1", "cand-smell-2"}
+
+
+def test_same_semantic_finding_different_candidate_uuids_same_canonical_id() -> None:
+    """The same semantic finding with different volatile UUIDs generates identical canonical_id."""
+    aggregator = FindingAggregator()
+
+    run1_cand = CandidateFinding(
+        finding_id="uuid-run1-aaaa-1111",
+        correlation_id="corr-run-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="defect",
+        severity="medium",
+        confidence=0.85,
+        summary="format_report() uses a mutable default argument",
+        rationale="Shared mutable default.",
+        file_path="examples/report.py",
+        line_range=(18, 21),
+        evidence_refs=("diff://examples/report.py#L18-L21",),
+        remediation="Replace with None sentinel.",
+    )
+    run2_cand = CandidateFinding(
+        finding_id="uuid-run2-bbbb-2222",
+        correlation_id="corr-run-2",
+        specialist_type=SpecialistType.QUALITY,
+        category="defect",
+        severity="medium",
+        confidence=0.85,
+        summary="format_report() uses a mutable default argument",
+        rationale="Shared mutable default.",
+        file_path="examples/report.py",
+        line_range=(18, 21),
+        evidence_refs=("diff://examples/report.py#L18-L21",),
+        remediation="Replace with None sentinel.",
+    )
+
+    canon1 = aggregator.aggregate([run1_cand], repository_id="owner/repo", head_sha="sha1")
+    canon2 = aggregator.aggregate([run2_cand], repository_id="owner/repo", head_sha="sha1")
+
+    assert len(canon1) == 1
+    assert len(canon2) == 1
+    assert canon1[0].canonical_id == canon2[0].canonical_id
+    assert canon1[0].canonical_id.startswith("can-")
+
+
+def test_genuinely_different_defects_on_same_line_remain_separate() -> None:
+    """Two genuinely distinct defects on the same line remain separate canonical findings."""
+    aggregator = FindingAggregator()
+
+    cand1 = CandidateFinding(
+        finding_id="cand-diff-1",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="defect",
+        severity="medium",
+        confidence=0.85,
+        summary="Mutable default argument in compute_metrics",
+        rationale="Mutable default dict retains state across calls.",
+        file_path="src/metrics.py",
+        line_range=(25, 25),
+        evidence_refs=("diff://src/metrics.py#L25",),
+        remediation="Use None default.",
+    )
+    cand2 = CandidateFinding(
+        finding_id="cand-diff-2",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="correctness",
+        severity="high",
+        confidence=0.90,
+        summary="Unhandled ZeroDivisionError in compute_metrics when total is zero",
+        rationale="Denominator is not checked for zero before division.",
+        file_path="src/metrics.py",
+        line_range=(25, 25),
+        evidence_refs=("diff://src/metrics.py#L25",),
+        remediation="Guard division with check total > 0.",
+    )
+
+    canonical = aggregator.aggregate([cand1, cand2], repository_id="owner/repo", head_sha="sha1")
+    assert len(canonical) == 2
+    summaries = {c.summary for c in canonical}
+    assert "Mutable default argument in compute_metrics" in summaries
+    assert "Unhandled ZeroDivisionError in compute_metrics when total is zero" in summaries
+
+
+def test_different_category_families_on_same_line_remain_separate() -> None:
+    """Security and documentation findings on the same line never merge."""
+    aggregator = FindingAggregator()
+
+    cand_sec = CandidateFinding(
+        finding_id="cand-sec-1",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.SECURITY,
+        category="security",
+        severity="high",
+        confidence=0.95,
+        summary="Hardcoded JWT secret key in config loader",
+        rationale="Secret key embedded directly in source code.",
+        file_path="src/config.py",
+        line_range=(10, 15),
+        evidence_refs=("diff://src/config.py#L10-L15",),
+        remediation="Load from environment variable.",
+    )
+    cand_doc = CandidateFinding(
+        finding_id="cand-doc-1",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.DOCUMENTATION,
+        category="docstring",
+        severity="info",
+        confidence=0.85,
+        summary="Missing docstring for load_config function",
+        rationale="Function is public but has no docstring explaining parameters.",
+        file_path="src/config.py",
+        line_range=(10, 15),
+        evidence_refs=("diff://src/config.py#L10-L15",),
+        remediation="Add docstring with args and return types.",
+    )
+
+    canonical = aggregator.aggregate([cand_sec, cand_doc], repository_id="owner/repo", head_sha="sha1")
+    assert len(canonical) == 2
+    categories = {c.category for c in canonical}
+    assert "security" in categories
+    assert "docstring" in categories

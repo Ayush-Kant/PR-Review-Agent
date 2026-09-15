@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 import hashlib
 import json
+import re
 import sqlite3
 import time
 
@@ -135,6 +136,74 @@ class ReviewTruthRecord:
     timestamp: float
 
 
+CATEGORY_FAMILY_MAP: dict[str, str] = {
+    # QUALITY_DEFECT
+    "quality": "quality_defect",
+    "correctness": "quality_defect",
+    "defect": "quality_defect",
+    "code_smell": "quality_defect",
+    "bug": "quality_defect",
+    "style": "quality_defect",
+    "maintainability": "quality_defect",
+    "best_practice": "quality_defect",
+    # SECURITY
+    "security": "security",
+    "security_vulnerability": "security",
+    "vulnerability": "security",
+    # TEST_GAP
+    "tests": "test_gap",
+    "test_gap": "test_gap",
+    "coverage": "test_gap",
+    "untested": "test_gap",
+    # DOCUMENTATION
+    "documentation": "documentation",
+    "doc_issue": "documentation",
+    "docs": "documentation",
+    "docstring": "documentation",
+}
+
+
+def normalize_category_family(category: str) -> str:
+    """Normalize raw finding category into its canonical category family."""
+    cleaned = (category or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return CATEGORY_FAMILY_MAP.get(cleaned, cleaned)
+
+
+_DEFECT_STOPWORDS: frozenset[str] = frozenset({
+    "a", "an", "the", "in", "on", "at", "to", "for", "of", "with", "by", "from",
+    "is", "are", "was", "were", "be", "been", "being", "uses", "using", "used", "use",
+    "leads", "lead", "leading", "across", "code", "issue", "defect", "finding",
+    "candidate", "potential", "detected", "observed", "found", "error", "line",
+    "lines", "this", "that", "there", "has", "have", "had", "should", "could",
+    "would", "may", "might", "will", "can", "not", "no", "and", "or", "but",
+    "as", "if", "when", "than", "so", "such", "all", "any", "each", "every",
+    "both", "either", "neither", "one", "two", "into", "onto", "under", "over"
+})
+
+
+def extract_semantic_tokens(text: str) -> set[str]:
+    """Extract normalized semantic tokens from text, filtering stopwords and volatile IDs."""
+    if not text:
+        return set()
+    words = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*", text.lower())
+    tokens = set()
+    for w in words:
+        if w.startswith(("cand", "corr", "can_")) or (len(w) >= 8 and all(c in "0123456789abcdef" for c in w)):
+            continue
+        if w not in _DEFECT_STOPWORDS and len(w) > 1:
+            tokens.add(w)
+    return tokens
+
+
+def compute_defect_fingerprint(text: str) -> str:
+    """Compute a deterministic semantic defect fingerprint string."""
+    tokens = sorted(extract_semantic_tokens(text))
+    if not tokens:
+        cleaned = re.sub(r"[^a-z0-9]", "_", (text or "").lower().strip())
+        return cleaned[:32] or "defect"
+    return "_".join(tokens[:8])
+
+
 class FindingAggregator:
     """Aggregates and deduplicates specialist CandidateFindings into CanonicalFindings."""
 
@@ -164,7 +233,7 @@ class FindingAggregator:
 
         for file_path in sorted(by_file.keys()):
             file_candidates = by_file[file_path]
-            # Cluster candidates that overlap in line range and category
+            # Cluster candidates that overlap in line range and category family
             clusters: list[list[CandidateFinding]] = []
             for cand in file_candidates:
                 placed = False
@@ -200,13 +269,53 @@ class FindingAggregator:
         r_a = a.line_range or (0, 0)
         r_b = b.line_range or (0, 0)
         overlaps = max(r_a[0], r_b[0]) <= min(r_a[1], r_b[1]) + 2
+        if not overlaps:
+            return False
 
-        # Check category alignment (exact match or correctness/quality compatibility)
-        cat_a = a.category.strip().lower()
-        cat_b = b.category.strip().lower()
-        cat_match = cat_a == cat_b or {cat_a, cat_b} <= {"correctness", "quality"}
+        # Check category alignment via normalized category family
+        fam_a = normalize_category_family(a.category)
+        fam_b = normalize_category_family(b.category)
+        if fam_a != fam_b:
+            return False
 
-        return overlaps and cat_match
+        # Check semantic defect identity: ensure two distinct defects on the same line remain separate
+        return self._are_defects_semantically_equivalent(a, b)
+
+    def _are_defects_semantically_equivalent(self, a: CandidateFinding, b: CandidateFinding) -> bool:
+        """Determine if two findings in the same category family represent the same defect."""
+        toks_a = extract_semantic_tokens(a.summary)
+        toks_b = extract_semantic_tokens(b.summary)
+
+        # If both summaries contain semantic tokens, evaluate their overlap
+        if toks_a and toks_b:
+            common = toks_a & toks_b
+            if not common:
+                # Fallback: check if rationales establish strong semantic overlap
+                rat_a = extract_semantic_tokens(a.rationale)
+                rat_b = extract_semantic_tokens(b.rationale)
+                common_rat = rat_a & rat_b
+                return len(common_rat) >= 2
+
+            # They share tokens. If identical token sets, definitely same defect
+            if toks_a == toks_b:
+                return True
+
+            # If multiple tokens are shared, they represent the same defect
+            if len(common) >= 2:
+                return True
+
+            # If only 1 token is shared, verify if it's a substantive overlap or just a shared code symbol
+            jaccard = len(common) / len(toks_a | toks_b)
+            min_ratio = len(common) / min(len(toks_a), len(toks_b))
+            return jaccard >= 0.3 or min_ratio >= 0.5
+
+        # If either summary lacked extractable semantic tokens, fall back to rationale or conservative merge
+        rat_a = extract_semantic_tokens(a.rationale)
+        rat_b = extract_semantic_tokens(b.rationale)
+        if rat_a and rat_b:
+            return bool(rat_a & rat_b)
+
+        return True
 
     def _create_canonical(
         self,
@@ -217,17 +326,22 @@ class FindingAggregator:
         delivery_id: str = "",
         run_id: str = "",
     ) -> CanonicalFinding:
-        # Determine highest severity
-        cluster_sorted_by_sev = sorted(
+        # Determine highest severity and primary candidate deterministically
+        cluster_sorted = sorted(
             cluster,
-            key=lambda c: SEVERITY_WEIGHTS.get(c.severity.lower(), 1),
+            key=lambda c: (
+                SEVERITY_WEIGHTS.get(c.severity.lower(), 1),
+                c.confidence,
+                c.summary,
+            ),
             reverse=True,
         )
-        top = cluster_sorted_by_sev[0]
+        top = cluster_sorted[0]
         merged_severity = top.severity.lower()
 
-        # Merged category
+        # Merged category preserves original category of top candidate
         merged_category = top.category.lower()
+        norm_family = normalize_category_family(merged_category)
 
         # Confidence calculation: calibrated maximum of contributing candidates
         merged_confidence = min(1.0, round(max(c.confidence for c in cluster), 4))
@@ -255,8 +369,13 @@ class FindingAggregator:
                 if r not in all_refs:
                     all_refs.append(r)
 
-        # Deterministic canonical finding ID
-        seed = f"{repository_id}:{file_path}:{line_range[0]}:{merged_category}:{'_'.join(contributing_ids)}"
+        # Deterministic semantic defect fingerprint
+        defect_fp = compute_defect_fingerprint(top.summary)
+
+        # Deterministic canonical finding ID derived strictly from stable attributes:
+        # repository + file path + normalized line/span + normalized category family + semantic defect fingerprint
+        # Notice: contributing_ids (volatile candidate UUIDs) are intentionally EXCLUDED.
+        seed = f"{repository_id}:{file_path}:{line_range[0]}_{line_range[1]}:{norm_family}:{defect_fp}"
         canonical_id = f"can-{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:12]}"
 
         merge_rationale = (

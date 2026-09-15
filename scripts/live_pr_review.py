@@ -121,10 +121,25 @@ def run_live_review() -> int:
         )
         for spec_type in all_specialist_types:
             print(f"[*] Running {spec_type.value.upper()} specialist...")
+            if spec_type == SpecialistType.SECURITY:
+                instructions = (
+                    f"Analyze PR #{pr_number} changes for genuine security defects with evidence.\n"
+                    "Security Review Guidelines:\n"
+                    "- Generic use of random, non-cryptographic hashing, or debug logging is NOT automatically a security vulnerability.\n"
+                    "- A security finding requires evidence that the behavior is security-sensitive in context.\n"
+                    "- For randomness specifically, classify it as a security issue only when the code path is used for something security-sensitive such as: "
+                    "authentication secrets, password reset tokens, session identifiers, CSRF tokens, cryptographic material, authorization/security tokens, or other explicitly security-sensitive values.\n"
+                    "- If the code clearly uses randomness for a benign identifier, demo/test value, display value, sampling, non-security ID, etc., do not emit a high/medium security vulnerability finding merely because the API is non-cryptographic.\n"
+                    "- When the context is ambiguous, prefer omission or a lower-severity informational/quality observation rather than an unsupported security claim.\n"
+                    "- Never suppress a genuine security issue when surrounding code/evidence establishes security-sensitive use."
+                )
+            else:
+                instructions = f"Analyze PR #{pr_number} changes for genuine {spec_type.value} defects with evidence."
+
             spec_input = SpecialistInput(
                 specialist_type=spec_type,
                 correlation_id=f"live-pr-{pr_number}-{int(time.time())}",
-                instructions=f"Analyze PR #{pr_number} changes for genuine {spec_type.value} defects with evidence.",
+                instructions=instructions,
                 changed_files=(),
                 diff_content=diff_content,
                 retrieved_evidence=(),
@@ -146,7 +161,9 @@ def run_live_review() -> int:
         print(f"[*] Aggregated {len(canonical_findings)} canonical findings.")
 
         # Policy evaluation and Review Truth persistence
-        conn = sqlite3.connect(":memory:")
+        db_path = os.environ.get("DATABASE_PATH", "pr_review_agent.db").strip()
+        print(f"[*] Connecting to Review Truth and effects database: {db_path}")
+        conn = sqlite3.connect(db_path)
         truth_store = ReviewTruthStore(conn)
         policy_engine = ReviewPolicyEngine(
             policy_version="v1",
@@ -176,6 +193,7 @@ def run_live_review() -> int:
         else:
             print("[*] DRY RUN: Publication skipped. Set PUBLISH_LIVE_REVIEW=1 to publish comments.")
 
+        conn.commit()
         conn.close()
         print("[+] Live integration execution completed successfully.")
         return 0

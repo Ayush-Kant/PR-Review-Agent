@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-15T18:29:25.534Z"
+    "updated_at": "2026-09-15T20:46:53.235Z"
   },
   "policy": {
     "ponytail": "full",
@@ -87,14 +87,14 @@
       ]
     },
     "plan_check": {
-      "at": "2026-09-15T17:26:25.948Z",
-      "source_hash": "62bedf2bae868e2a88125dee09a53670d0d094f0928c587222fd5463c9407145"
+      "at": "2026-09-15T20:20:45.663Z",
+      "source_hash": "1db63ab79fdb099c561f960342580d77b3f5f0da614aaf6edc1fda36c5a63293"
     },
     "plan_approval": {
-      "human": "Ayush Kant",
-      "reason": "Approved M5 Phase 3 live-pr-validation task definition",
-      "at": "2026-09-15T17:27:03.477Z",
-      "source_hash": "62bedf2bae868e2a88125dee09a53670d0d094f0928c587222fd5463c9407145"
+      "human": "Developer",
+      "reason": "Approved review-hardening task",
+      "at": "2026-09-15T20:20:50.582Z",
+      "source_hash": "1db63ab79fdb099c561f960342580d77b3f5f0da614aaf6edc1fda36c5a63293"
     }
   },
   "artifacts": [
@@ -1171,6 +1171,93 @@
         "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
         "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
       }
+    },
+    {
+      "id": "review-hardening",
+      "outcome": "Harden finding deduplication, security finding precision, and standalone harness publication idempotency",
+      "state": "done",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-09"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_finding_policy_and_hitl.py tests/test_live_pr_validation.py",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/review-hardening-contract-fdead6a6-1625-4cea-bbe5-8719e0444a56.json",
+            "hash": "e92e4ef394b4bf0ae95ac88d865d86b79c8d36518cf90d17ef5da6efb45be382",
+            "source_hash": "5af3a1f84ada420fa5e33e930025bfcac2d6c7a796eb3a035f974e488e4a7f7a",
+            "config_hash": "798bd6fb1d1617e11ddf1560719984278e16865da9caefab6697b0b0ccc70a23",
+            "observed_at": "2026-09-15T20:46:08.069Z"
+          }
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/review-hardening-independent-review-0a91b3c8-9c4c-4758-9f8f-18c4d0910413.json",
+            "hash": "26cbdeceb2146bf31537371d4f64927fd3ce8abf989379b16e898ace05da6356",
+            "source_hash": "5af3a1f84ada420fa5e33e930025bfcac2d6c7a796eb3a035f974e488e4a7f7a",
+            "config_hash": "798bd6fb1d1617e11ddf1560719984278e16865da9caefab6697b0b0ccc70a23",
+            "observed_at": "2026-09-15T20:46:39.006Z"
+          }
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-15T20:20:36.603Z",
+      "updated_at": "2026-09-15T20:46:45.991Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/adapters/__init__.py": "0be5bd131c0c2e1610fc0b1cd144260beb00030381d3d47575e9452b4ecf2ab4",
+        "pr_review_agent/adapters/github.py": "1f6b8ac760c3713dda0f885cc5fe5936baa4fb43a3c4c7da3d21f6f60b9a0789",
+        "pr_review_agent/adapters/llm.py": "af75067d78bc84a5722d2a49f65ac478e6467e1ca94bd3eb4a5dadba87261c3e",
+        "pr_review_agent/adapters/webhook_ingress.py": "5611ad1f00c56c4ac5f70be9854f2c6ffc1e94d5231044a8a4a404a5ca054c2f",
+        "pr_review_agent/cost_controls.py": "b55e03c0e86b9add48d9d7b28e3d8bca3f034ca7bec177cf2dd0245150f60d2e",
+        "pr_review_agent/evaluation.py": "d7635a8f68014ef1ccfde8e167b7a30ae04a1314e7f82ed71d472c795fccbe85",
+        "pr_review_agent/github_output.py": "ef66bd4121b68bb1d44e6ab3ea110746404dd05fb936d00fca957491fc370e60",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/observability.py": "73f34d5a5d3c99a69e2016657277fc89d1f41ae87a4b49557cf57a7c9acc17f7",
+        "pr_review_agent/orchestration.py": "c1ac56039f5ce26e06e30a401c3adfeb5bbe36b7284c8e9667107f16ab7ab0b5",
+        "pr_review_agent/policy.py": "bb4773ba51936ec7f760fd83909dfa8b9dac1ae1249bf376ab420e2273c0b645",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "pr_review_agent/security.py": "273fc57ed51b7e7110669c9416211ed1f174c33d959d38053c9196972da05021",
+        "pr_review_agent/server.py": "1dacb5ec685e4c597c2073b22cb38ebf3d51b1162b7b9fb221cb75ebce0048ea",
+        "pr_review_agent/service_config.py": "e8efabe2b6ef5ae5e41f61af42243ec4919a435a460787094c253f781769f84f",
+        "pr_review_agent/worker.py": "f69e86e45fc5d14f100188196fce2ff8d9df8dfb00f0ff52bffe858116634490",
+        "scripts/live_pr_review.py": "e04217501a204c136af2d487d25692d9c32e98a506eeb22e2fad27ca021bbb8d",
+        "tests/test_audit_observability_dashboard.py": "6b2982f18570ad0ee42cc475a2639ae914d4df80cf7f6bbb76fb74775a75bfdc",
+        "tests/test_cost_and_budget_controls.py": "07813b8f14603149306d1366517d2dde124be70552f96f26b914a0b45cdc639e",
+        "tests/test_end_to_end_replay.py": "7894afcf7427c7d408e747f72520ddd01f19060b6494ae158da19790b3129dd8",
+        "tests/test_evaluation_learning_drift.py": "3207ef8d4c0165f30057b28065627685932fe079ead1febdd428b124e91eb854",
+        "tests/test_finding_policy_and_hitl.py": "ada104191955a41a87c1579603598d8127dd89fdb61ab333e7090f2c0f0c0606",
+        "tests/test_github_review_output.py": "40e2ae39b0edec6da8cbe268b27a626ad8d60336f1d110d547f0bfb948f37b7a",
+        "tests/test_live_pr_validation.py": "faa5bf7761fb25a9a0cc1c4e3a3ca4f2c096580f8528c92fb0281e902520908b",
+        "tests/test_network_adapters.py": "67d071940b8ac7be2a779c8369f580e75aba7ab7eb486db5fa389a42c08aedd7",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     }
   ],
   "learning_proposals": [],
@@ -1273,6 +1360,15 @@
       "task": "live-pr-validation",
       "human": "Ayush Kant",
       "reason": "Independent review passed without defects. Verified unified config, ASGI server, autonomous worker, 10/10 focused tests, 179/179 full suite, and safety invariants.",
+      "revision": null
+    },
+    {
+      "id": "0a91b3c8-9c4c-4758-9f8f-18c4d0910413",
+      "at": "2026-09-15T20:46:39.006Z",
+      "action": "approve",
+      "task": "review-hardening",
+      "human": "Ayush Kant",
+      "reason": "Validated semantic finding deduplication, deterministic canonical IDs, security prompt calibration, and durable SQLite publication idempotency with 190 passing tests",
       "revision": null
     }
   ],
@@ -2020,6 +2116,30 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-15T18:23:15.049Z"
+    },
+    {
+      "id": "fdead6a6-1625-4cea-bbe5-8719e0444a56",
+      "task": "review-hardening",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_finding_policy_and_hitl.py tests/test_live_pr_validation.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 20332,
+      "child_pid": 21556,
+      "started_at": "2026-09-15T20:46:00.131Z",
+      "status": "passed",
+      "before_hash": "5af3a1f84ada420fa5e33e930025bfcac2d6c7a796eb3a035f974e488e4a7f7a",
+      "config_hash": "798bd6fb1d1617e11ddf1560719984278e16865da9caefab6697b0b0ccc70a23",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-15T20:46:08.069Z"
     }
   ],
   "authorizations": [],
@@ -2027,11 +2147,11 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-15T18:29:24.853Z",
+    "at": "2026-09-15T20:46:53.058Z",
     "revision": {
-      "commit": "777c2b67cb19f3b3d1689526d0060dcdf6816961",
+      "commit": "8dee00e1d0afc10ea44d4561f10d02488dc88f4d",
       "dirty": true,
-      "source_hash": "16449891fa36ed9509a8367ab342a78e3d0ff1820d7d1f250840452023df420d"
+      "source_hash": "5af3a1f84ada420fa5e33e930025bfcac2d6c7a796eb3a035f974e488e4a7f7a"
     },
     "active_task": null,
     "next_action": "Review completed work and choose the next bounded outcome."
