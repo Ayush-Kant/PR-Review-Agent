@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "b1797cebe0e367bd17041346f9bd22b422613ff9",
-  "sourceHash": "8766a01faa9d1f70dbabcee953a4679c957945ef9640dd81de9b862c1b086ce3",
+  "revision": "8a3feaedae180105cc6224ea66d826b4f6c8cf7b",
+  "sourceHash": "e2ddd77c786777f11fd7bdc56fad89bf512b18f490023734772ba97f4cc66d33",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -18,6 +18,46 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "a650975c324a6795e21cc40682fc7e9ded58950b5f965aec1512690b56fe33a1"
+    },
+    {
+      "id": "file:pr_review_agent/adapters/__init__.py",
+      "type": "file",
+      "label": "pr_review_agent/adapters/__init__.py",
+      "path": "pr_review_agent/adapters/__init__.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "d419e455ff0479237ef5fcf41105e896eaf7816577e27adce595ea66ad8d5feb"
+    },
+    {
+      "id": "file:pr_review_agent/adapters/github.py",
+      "type": "file",
+      "label": "pr_review_agent/adapters/github.py",
+      "path": "pr_review_agent/adapters/github.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "07a6c13367042fb678e8663950db020e6be283490cfc4548440ccb6827dd36df"
+    },
+    {
+      "id": "file:pr_review_agent/adapters/llm.py",
+      "type": "file",
+      "label": "pr_review_agent/adapters/llm.py",
+      "path": "pr_review_agent/adapters/llm.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "bf902db15ccb58f5d6e44c83e6d0a7441677e20788d63d3f2557b46091090135"
+    },
+    {
+      "id": "file:pr_review_agent/adapters/webhook_ingress.py",
+      "type": "file",
+      "label": "pr_review_agent/adapters/webhook_ingress.py",
+      "path": "pr_review_agent/adapters/webhook_ingress.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "348d5464d574b9750ba1a102879c6a836d192a58d58472ef8a3351622f959683"
     },
     {
       "id": "file:pr_review_agent/cost_controls.py",
@@ -110,6 +150,16 @@
       "contentHash": "8d856825662863a1f72b1665d9b79fd82b3620e2d66622062c8072695fe8ad6e"
     },
     {
+      "id": "file:scripts/live_pr_review.py",
+      "type": "file",
+      "label": "scripts/live_pr_review.py",
+      "path": "scripts/live_pr_review.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "a7ab20549a2b4af3f662fe9baa9799a5ccfb630e52c218febd628997d014fe18"
+    },
+    {
       "id": "file:tests/test_audit_observability_dashboard.py",
       "type": "file",
       "label": "tests/test_audit_observability_dashboard.py",
@@ -128,6 +178,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "c3bff60c5724b7b33e60d9b723afad50e2676fb443a161fe3ae186af836ced49"
+    },
+    {
+      "id": "file:tests/test_end_to_end_replay.py",
+      "type": "file",
+      "label": "tests/test_end_to_end_replay.py",
+      "path": "tests/test_end_to_end_replay.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "7c4b94e26cbb88556400b82b9771c6c6cf7666a181d3549b574228d000d1a6ae"
     },
     {
       "id": "file:tests/test_evaluation_learning_drift.py",
@@ -158,6 +218,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "b0e8795cfcabca7039048d54ba0485a5f3c972219530b9703b81ae311051eb4d"
+    },
+    {
+      "id": "file:tests/test_network_adapters.py",
+      "type": "file",
+      "label": "tests/test_network_adapters.py",
+      "path": "tests/test_network_adapters.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "e21ea45acd3fba7a024cc3ef2a3b73136626f5b0774c8eb981992c6e4ac575c7"
     },
     {
       "id": "file:tests/test_retrieval_and_findings.py",

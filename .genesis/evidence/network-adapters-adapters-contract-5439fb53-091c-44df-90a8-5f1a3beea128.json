@@ -1,0 +1,30 @@
+{
+  "task": "network-adapters",
+  "gate": "adapters-contract",
+  "kind": "command",
+  "attempt": "5439fb53-091c-44df-90a8-5f1a3beea128",
+  "command": "python -m pytest tests/test_network_adapters.py",
+  "started_at": "2026-09-15T13:40:24.054Z",
+  "observed_at": "2026-09-15T13:40:29.858Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 30 items\r\n\r\ntests\\test_network_adapters.py ..............................            [100%]\r\n\r\n============================= 30 passed in 1.01s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "8a3feaedae180105cc6224ea66d826b4f6c8cf7b",
+    "dirty": true
+  },
+  "source_hash": "07b49605eeab3515c5a9a522504849a5ff04942f2be7c982a75d2c460b440fec",
+  "before_hash": "07b49605eeab3515c5a9a522504849a5ff04942f2be7c982a75d2c460b440fec",
+  "config_hash": "a7056dd05a11921943d2b53063c6139a96f75e631fd6e324e4cb6d0b8a4daf3c",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "5470c71ac1d63afd66f35536c13bf53bb953b0eb7e999aae4458eef81edf4660"
+}

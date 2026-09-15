@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-14T22:56:55.277Z"
+    "updated_at": "2026-09-15T15:44:58.918Z"
   },
   "policy": {
     "ponytail": "full",
@@ -87,14 +87,14 @@
       ]
     },
     "plan_check": {
-      "at": "2026-09-14T15:31:19.858Z",
-      "source_hash": "e52c49539ecc360aa85930ef48a67c6cbcdc76102a32c958861214764af1e9ff"
+      "at": "2026-09-15T11:06:50.674Z",
+      "source_hash": "2e2cf3495120c161cc5d15d86d45412f239905ecf17dcff418e7884c1b189fdd"
     },
     "plan_approval": {
       "human": "Ayush Kant",
-      "reason": "Approved after review of the 9 bounded implementation slices, 47-requirement coverage, requirement linkage, and executable validation gates.",
-      "at": "2026-09-14T15:32:38.520Z",
-      "source_hash": "e52c49539ecc360aa85930ef48a67c6cbcdc76102a32c958861214764af1e9ff"
+      "reason": "Approved bounded M5 Phase 2 network-adapters task for GitHub network client, LLM provider adapters, and ASGI webhook ingress",
+      "at": "2026-09-15T11:09:49.474Z",
+      "source_hash": "2e2cf3495120c161cc5d15d86d45412f239905ecf17dcff418e7884c1b189fdd"
     }
   },
   "artifacts": [
@@ -972,6 +972,111 @@
         "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
         "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
       }
+    },
+    {
+      "id": "network-adapters",
+      "outcome": "Implement concrete GitHub network client, LLM provider adapters, and ASGI webhook ingress foundation",
+      "state": "done",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08",
+        "FR-12",
+        "FR-15",
+        "FR-18",
+        "FR-19",
+        "AC-01",
+        "AC-02",
+        "AC-03",
+        "AC-04",
+        "AC-08",
+        "AC-09",
+        "AC-11",
+        "AC-13",
+        "AC-14",
+        "NFR-01",
+        "NFR-02",
+        "NFR-03",
+        "NFR-04",
+        "NFR-05",
+        "NFR-06",
+        "NFR-08",
+        "NFR-12"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "adapters-contract",
+          "kind": "command",
+          "command": "python -m pytest tests/test_network_adapters.py",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/network-adapters-adapters-contract-5439fb53-091c-44df-90a8-5f1a3beea128.json",
+            "hash": "5470c71ac1d63afd66f35536c13bf53bb953b0eb7e999aae4458eef81edf4660",
+            "source_hash": "07b49605eeab3515c5a9a522504849a5ff04942f2be7c982a75d2c460b440fec",
+            "config_hash": "a7056dd05a11921943d2b53063c6139a96f75e631fd6e324e4cb6d0b8a4daf3c",
+            "observed_at": "2026-09-15T13:40:29.858Z"
+          }
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/network-adapters-independent-review-8b588a53-a711-4caf-be15-f4b4c4583253.json",
+            "hash": "f399b70ebb9818254a64c3005b15c68fe944bef5605458711e7e65627987698d",
+            "source_hash": "07b49605eeab3515c5a9a522504849a5ff04942f2be7c982a75d2c460b440fec",
+            "config_hash": "a7056dd05a11921943d2b53063c6139a96f75e631fd6e324e4cb6d0b8a4daf3c",
+            "observed_at": "2026-09-15T15:41:43.921Z"
+          }
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-15T11:05:29.867Z",
+      "updated_at": "2026-09-15T15:42:45.587Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/cost_controls.py": "b55e03c0e86b9add48d9d7b28e3d8bca3f034ca7bec177cf2dd0245150f60d2e",
+        "pr_review_agent/evaluation.py": "d7635a8f68014ef1ccfde8e167b7a30ae04a1314e7f82ed71d472c795fccbe85",
+        "pr_review_agent/github_output.py": "ef66bd4121b68bb1d44e6ab3ea110746404dd05fb936d00fca957491fc370e60",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/observability.py": "73f34d5a5d3c99a69e2016657277fc89d1f41ae87a4b49557cf57a7c9acc17f7",
+        "pr_review_agent/orchestration.py": "c1ac56039f5ce26e06e30a401c3adfeb5bbe36b7284c8e9667107f16ab7ab0b5",
+        "pr_review_agent/policy.py": "bb4773ba51936ec7f760fd83909dfa8b9dac1ae1249bf376ab420e2273c0b645",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "pr_review_agent/security.py": "273fc57ed51b7e7110669c9416211ed1f174c33d959d38053c9196972da05021",
+        "tests/test_audit_observability_dashboard.py": "6b2982f18570ad0ee42cc475a2639ae914d4df80cf7f6bbb76fb74775a75bfdc",
+        "tests/test_cost_and_budget_controls.py": "07813b8f14603149306d1366517d2dde124be70552f96f26b914a0b45cdc639e",
+        "tests/test_end_to_end_replay.py": "7894afcf7427c7d408e747f72520ddd01f19060b6494ae158da19790b3129dd8",
+        "tests/test_evaluation_learning_drift.py": "3207ef8d4c0165f30057b28065627685932fe079ead1febdd428b124e91eb854",
+        "tests/test_finding_policy_and_hitl.py": "ada104191955a41a87c1579603598d8127dd89fdb61ab333e7090f2c0f0c0606",
+        "tests/test_github_review_output.py": "40e2ae39b0edec6da8cbe268b27a626ad8d60336f1d110d547f0bfb948f37b7a",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     }
   ],
   "learning_proposals": [],
@@ -1056,6 +1161,15 @@
       "task": "evaluation-learning-drift",
       "human": "Ayush Kant",
       "reason": "Independent review requested after targeted fixes for model-behavior drift coverage, rollback validation, durable active policy recovery, expanded secret scanning, and removal of the unused baseline_metrics interface. Focused and full regression tests pass and the executable Genesis gate passes.",
+      "revision": null
+    },
+    {
+      "id": "8b588a53-a711-4caf-be15-f4b4c4583253",
+      "at": "2026-09-15T15:41:43.921Z",
+      "action": "approve",
+      "task": "network-adapters",
+      "human": "Independent Reviewer",
+      "reason": "Independent review passed without defects; all 30 adapter tests and 169 regression tests passed",
       "revision": null
     }
   ],
@@ -1731,6 +1845,54 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-14T22:51:45.622Z"
+    },
+    {
+      "id": "2b95ee32-8a19-4555-b7a7-dd64db659cb3",
+      "task": "network-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_network_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 4336,
+      "child_pid": 22756,
+      "started_at": "2026-09-15T12:57:35.238Z",
+      "status": "passed",
+      "before_hash": "4fed97f4d475642cdaeaac8cfd3201dffa7202a9561108b188891b19d776c8bc",
+      "config_hash": "a7056dd05a11921943d2b53063c6139a96f75e631fd6e324e4cb6d0b8a4daf3c",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-15T12:57:48.961Z"
+    },
+    {
+      "id": "5439fb53-091c-44df-90a8-5f1a3beea128",
+      "task": "network-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_network_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 18340,
+      "child_pid": 9336,
+      "started_at": "2026-09-15T13:40:24.054Z",
+      "status": "passed",
+      "before_hash": "07b49605eeab3515c5a9a522504849a5ff04942f2be7c982a75d2c460b440fec",
+      "config_hash": "a7056dd05a11921943d2b53063c6139a96f75e631fd6e324e4cb6d0b8a4daf3c",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-15T13:40:29.858Z"
     }
   ],
   "authorizations": [],
@@ -1738,11 +1900,11 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-14T22:56:55.078Z",
+    "at": "2026-09-15T15:44:58.205Z",
     "revision": {
-      "commit": "b1797cebe0e367bd17041346f9bd22b422613ff9",
+      "commit": "8a3feaedae180105cc6224ea66d826b4f6c8cf7b",
       "dirty": true,
-      "source_hash": "d3f17e4e807ba6a4c9ceb6fe56d4438e2586b38d5c90c25908e1316f437c137a"
+      "source_hash": "07b49605eeab3515c5a9a522504849a5ff04942f2be7c982a75d2c460b440fec"
     },
     "active_task": null,
     "next_action": "Review completed work and choose the next bounded outcome."

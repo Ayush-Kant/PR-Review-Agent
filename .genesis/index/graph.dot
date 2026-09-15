@@ -2,6 +2,10 @@ digraph genesis {
   rankdir=LR;
   node [shape=box,fontname="system-ui"];
   "file:pr_review_agent/__init__.py" [label="pr_review_agent/__init__.py",class="file"];
+  "file:pr_review_agent/adapters/__init__.py" [label="pr_review_agent/adapters/__init__.py",class="file"];
+  "file:pr_review_agent/adapters/github.py" [label="pr_review_agent/adapters/github.py",class="file"];
+  "file:pr_review_agent/adapters/llm.py" [label="pr_review_agent/adapters/llm.py",class="file"];
+  "file:pr_review_agent/adapters/webhook_ingress.py" [label="pr_review_agent/adapters/webhook_ingress.py",class="file"];
   "file:pr_review_agent/cost_controls.py" [label="pr_review_agent/cost_controls.py",class="file"];
   "file:pr_review_agent/evaluation.py" [label="pr_review_agent/evaluation.py",class="file"];
   "file:pr_review_agent/github_output.py" [label="pr_review_agent/github_output.py",class="file"];
@@ -11,11 +15,14 @@ digraph genesis {
   "file:pr_review_agent/policy.py" [label="pr_review_agent/policy.py",class="file"];
   "file:pr_review_agent/retrieval.py" [label="pr_review_agent/retrieval.py",class="file"];
   "file:pr_review_agent/security.py" [label="pr_review_agent/security.py",class="file"];
+  "file:scripts/live_pr_review.py" [label="scripts/live_pr_review.py",class="file"];
   "file:tests/test_audit_observability_dashboard.py" [label="tests/test_audit_observability_dashboard.py",class="file"];
   "file:tests/test_cost_and_budget_controls.py" [label="tests/test_cost_and_budget_controls.py",class="file"];
+  "file:tests/test_end_to_end_replay.py" [label="tests/test_end_to_end_replay.py",class="file"];
   "file:tests/test_evaluation_learning_drift.py" [label="tests/test_evaluation_learning_drift.py",class="file"];
   "file:tests/test_finding_policy_and_hitl.py" [label="tests/test_finding_policy_and_hitl.py",class="file"];
   "file:tests/test_github_review_output.py" [label="tests/test_github_review_output.py",class="file"];
+  "file:tests/test_network_adapters.py" [label="tests/test_network_adapters.py",class="file"];
   "file:tests/test_retrieval_and_findings.py" [label="tests/test_retrieval_and_findings.py",class="file"];
   "file:tests/test_review_orchestration.py" [label="tests/test_review_orchestration.py",class="file"];
   "file:tests/test_security_boundaries.py" [label="tests/test_security_boundaries.py",class="file"];
