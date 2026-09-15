@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-15T11:09:49.474Z
+- plan approval: Ayush Kant at 2026-09-15T17:27:03.477Z
 
 ## Tasks
 
@@ -86,5 +86,13 @@
 - requirements: FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-12, FR-15, FR-18, FR-19, AC-01, AC-02, AC-03, AC-04, AC-08, AC-09, AC-11, AC-13, AC-14, NFR-01, NFR-02, NFR-03, NFR-04, NFR-05, NFR-06, NFR-08, NFR-12
 - scope: not bounded
 - gates: adapters-contract: python -m pytest tests/test_network_adapters.py, independent-review: pass
+- next: Run the task pre-flight.
+
+### live-pr-validation — Bridge core engine and network adapters into a runnable autonomous live-review service and validate offline
+
+- state/risk: done / medium
+- requirements: FR-01, FR-02, FR-03, FR-04, FR-05, FR-06, FR-07, FR-08, FR-12, FR-15, FR-18, FR-19
+- scope: not bounded
+- gates: validation-contract: python -m pytest tests/test_live_pr_validation.py, independent-review: pass
 - next: Run the task pre-flight.
 

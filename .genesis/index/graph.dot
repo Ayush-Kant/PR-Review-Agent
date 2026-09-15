@@ -15,6 +15,9 @@ digraph genesis {
   "file:pr_review_agent/policy.py" [label="pr_review_agent/policy.py",class="file"];
   "file:pr_review_agent/retrieval.py" [label="pr_review_agent/retrieval.py",class="file"];
   "file:pr_review_agent/security.py" [label="pr_review_agent/security.py",class="file"];
+  "file:pr_review_agent/server.py" [label="pr_review_agent/server.py",class="file"];
+  "file:pr_review_agent/service_config.py" [label="pr_review_agent/service_config.py",class="file"];
+  "file:pr_review_agent/worker.py" [label="pr_review_agent/worker.py",class="file"];
   "file:scripts/live_pr_review.py" [label="scripts/live_pr_review.py",class="file"];
   "file:tests/test_audit_observability_dashboard.py" [label="tests/test_audit_observability_dashboard.py",class="file"];
   "file:tests/test_cost_and_budget_controls.py" [label="tests/test_cost_and_budget_controls.py",class="file"];
@@ -22,6 +25,7 @@ digraph genesis {
   "file:tests/test_evaluation_learning_drift.py" [label="tests/test_evaluation_learning_drift.py",class="file"];
   "file:tests/test_finding_policy_and_hitl.py" [label="tests/test_finding_policy_and_hitl.py",class="file"];
   "file:tests/test_github_review_output.py" [label="tests/test_github_review_output.py",class="file"];
+  "file:tests/test_live_pr_validation.py" [label="tests/test_live_pr_validation.py",class="file"];
   "file:tests/test_network_adapters.py" [label="tests/test_network_adapters.py",class="file"];
   "file:tests/test_retrieval_and_findings.py" [label="tests/test_retrieval_and_findings.py",class="file"];
   "file:tests/test_review_orchestration.py" [label="tests/test_review_orchestration.py",class="file"];

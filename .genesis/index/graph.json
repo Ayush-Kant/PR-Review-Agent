@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "8a3feaedae180105cc6224ea66d826b4f6c8cf7b",
-  "sourceHash": "e2ddd77c786777f11fd7bdc56fad89bf512b18f490023734772ba97f4cc66d33",
+  "revision": "777c2b67cb19f3b3d1689526d0060dcdf6816961",
+  "sourceHash": "9051f1ec80b4db5900c69ea1531c8f19407a2fed0c759db79c767616c43ccba4",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -150,6 +150,36 @@
       "contentHash": "8d856825662863a1f72b1665d9b79fd82b3620e2d66622062c8072695fe8ad6e"
     },
     {
+      "id": "file:pr_review_agent/server.py",
+      "type": "file",
+      "label": "pr_review_agent/server.py",
+      "path": "pr_review_agent/server.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "866adb62536d9a3ad1634900173ffb4a8bf9d9d833a4d8cc0da1ac0234a4fa89"
+    },
+    {
+      "id": "file:pr_review_agent/service_config.py",
+      "type": "file",
+      "label": "pr_review_agent/service_config.py",
+      "path": "pr_review_agent/service_config.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "826a9b72ce61c9c0f7f18b6a198cb00e9f06ed5ebf822d5e2d8741e6f8a0d0d7"
+    },
+    {
+      "id": "file:pr_review_agent/worker.py",
+      "type": "file",
+      "label": "pr_review_agent/worker.py",
+      "path": "pr_review_agent/worker.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "b99b6539b802ec315d84efa45c3ff5e6c573e74967ead356057ff6caa0cf9ea7"
+    },
+    {
       "id": "file:scripts/live_pr_review.py",
       "type": "file",
       "label": "scripts/live_pr_review.py",
@@ -218,6 +248,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "b0e8795cfcabca7039048d54ba0485a5f3c972219530b9703b81ae311051eb4d"
+    },
+    {
+      "id": "file:tests/test_live_pr_validation.py",
+      "type": "file",
+      "label": "tests/test_live_pr_validation.py",
+      "path": "tests/test_live_pr_validation.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "73ff13dbe47d109a618250e0bb1efa2378806a42664e69e0f9db39b582fbb130"
     },
     {
       "id": "file:tests/test_network_adapters.py",

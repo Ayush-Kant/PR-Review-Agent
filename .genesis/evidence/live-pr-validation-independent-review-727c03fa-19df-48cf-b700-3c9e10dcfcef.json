@@ -1,0 +1,13 @@
+{
+  "task": "live-pr-validation",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "727c03fa-19df-48cf-b700-3c9e10dcfcef",
+  "human": "Ayush Kant",
+  "reason": "Independent review passed without defects. Verified unified config, ASGI server, autonomous worker, 10/10 focused tests, 179/179 full suite, and safety invariants.",
+  "observed_at": "2026-09-15T18:26:53.726Z",
+  "source_hash": "16449891fa36ed9509a8367ab342a78e3d0ff1820d7d1f250840452023df420d",
+  "config_hash": "c9c65f24873c51b47b0be67ebb35ef663934eabab9ade4d8e9fec65da4ec298f",
+  "reviewed_proofs": "2b02d13082e6d7e7039bb3304ea9cf9b003b2347e326a31e28bf20b13b0ff5f6",
+  "hash": "da340f6d7b232107d8369e31b83dd94f2418f3887629c3be4bbf21f35a9fb1d8"
+}

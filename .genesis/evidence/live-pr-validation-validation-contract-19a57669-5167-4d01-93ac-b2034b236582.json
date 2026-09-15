@@ -1,0 +1,30 @@
+{
+  "task": "live-pr-validation",
+  "gate": "validation-contract",
+  "kind": "command",
+  "attempt": "19a57669-5167-4d01-93ac-b2034b236582",
+  "command": "python -m pytest tests/test_live_pr_validation.py",
+  "started_at": "2026-09-15T18:23:00.471Z",
+  "observed_at": "2026-09-15T18:23:15.049Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 10 items\r\n\r\ntests\\test_live_pr_validation.py ..........                              [100%]\r\n\r\n============================= 10 passed in 2.33s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "777c2b67cb19f3b3d1689526d0060dcdf6816961",
+    "dirty": true
+  },
+  "source_hash": "16449891fa36ed9509a8367ab342a78e3d0ff1820d7d1f250840452023df420d",
+  "before_hash": "16449891fa36ed9509a8367ab342a78e3d0ff1820d7d1f250840452023df420d",
+  "config_hash": "c9c65f24873c51b47b0be67ebb35ef663934eabab9ade4d8e9fec65da4ec298f",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "623299d10ff1d4ee3e7d985994480c3b57b94cb71f54a8b2c5f6af9cc967fd68"
+}
