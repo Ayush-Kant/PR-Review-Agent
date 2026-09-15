@@ -1,0 +1,1 @@
+Controlled PR-review integration test fixture. Not production code.
