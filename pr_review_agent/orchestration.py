@@ -9,7 +9,7 @@ from enum import Enum
 import json
 import sqlite3
 import time
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Protocol, TypedDict, runtime_checkable
 import uuid
 
 from langgraph.graph import END, START, StateGraph
@@ -209,6 +209,118 @@ class _GraphState(TypedDict, total=False):
 
 
 SpecialistHandler = Callable[[SpecialistInput], SpecialistOutput | asyncio.Future[SpecialistOutput]]
+
+
+@runtime_checkable
+class DurableQueueProtocol(Protocol):
+    """Abstract protocol for durable review job queues (SQLite reference, Redis/ARQ production).
+
+    Queue Contract Invariants:
+    1. Enqueue Idempotency: Multiple enqueue calls with identical delivery_id must return
+       the existing job without duplicating or resetting attempt state.
+    2. Lease Semantics: lease_next_job() atomically transitions an eligible QUEUED job to
+       RUNNING, incrementing attempt_count. Jobs with future next_run_at must not be leased.
+    3. Concurrency Bounding: When max_concurrency_per_repo is configured, candidate jobs
+       for at-capacity repositories are skipped to prevent cross-repository starvation (NFR-05).
+    4. Lease Ownership & Expiration (W1-02 Contract / W1-03 Implementation):
+       - Lease ownership belongs to the active leasing worker process.
+       - A lease has a finite duration bounded by deadline_seconds.
+       - If a worker crashes or partitions while a job is RUNNING, the lease expires.
+       - Zombie-worker recovery must return expired RUNNING jobs to QUEUED (incrementing
+         attempt_count towards max_retries) or dead-letter them if max_retries is exceeded.
+         (Concrete Redis visibility timeouts / heartbeats implemented in W1-03; fault-tested in W1-07).
+    5. Terminal States: mark_completed transitions to COMPLETED; mark_failed applies exponential
+       backoff or transitions to DEAD_LETTER on retry exhaustion; cancel_job transitions to CANCELLED.
+    """
+
+    def enqueue(
+        self,
+        snapshot: ReviewSnapshot,
+        delivery_id: str,
+        *,
+        max_retries: int = 3,
+        backoff_base_seconds: float = 1.0,
+        deadline_seconds: float = 60.0,
+        now: float | None = None,
+    ) -> ReviewJob:
+        """Enqueue a review job atomically with durable identity correlated to the delivery."""
+        ...
+
+    def lease_next_job(
+        self,
+        now: float | None = None,
+        *,
+        max_concurrency_per_repo: int | None = None,
+    ) -> ReviewJob | None:
+        """Atomically lease the next scheduled job."""
+        ...
+
+    def mark_completed(self, job_id: str, now: float | None = None) -> ReviewJob:
+        """Mark job successfully completed."""
+        ...
+
+    def mark_failed(self, job_id: str, error: str, now: float | None = None) -> ReviewJob:
+        """Handle failure: apply exponential backoff retry or transition to dead-letter."""
+        ...
+
+    def cancel_job(self, job_id: str, reason: str = "", now: float | None = None) -> ReviewJob:
+        """Cancel a job, recording reason."""
+        ...
+
+    def get_job(self, job_id: str) -> ReviewJob | None:
+        """Retrieve a review job by its durable ID."""
+        ...
+
+
+# Forbidden secret-bearing keys in durable workflow checkpoints (Part 4)
+CHECKPOINT_FORBIDDEN_KEYS: frozenset[str] = frozenset({
+    "api_key",
+    "token",
+    "secret",
+    "password",
+    "webhook_secret",
+    "private_key",
+    "connection_string",
+    "authorization",
+})
+
+
+def validate_checkpoint_state_security(state_values: Mapping[str, Any]) -> None:
+    """Enforce checkpoint security: ensure no forbidden secret-bearing keys exist in checkpoint state."""
+    for key in state_values:
+        key_lower = str(key).lower()
+        for forbidden in CHECKPOINT_FORBIDDEN_KEYS:
+            if forbidden in key_lower:
+                raise ValueError(f"Forbidden secret-bearing key '{key}' detected in workflow checkpoint state")
+
+
+@runtime_checkable
+class WorkflowEngineProtocol(Protocol):
+    """Abstract protocol for review lifecycle workflow engines (LangGraph, recoverable orchestrators).
+
+    Checkpoint Contract Invariants:
+    1. Workflow Identity: Identified by canonical graph topology (initialize -> 4 specialists -> terminal).
+    2. Thread Identity: thread_id is strictly bound to job.job_id (1:1 with delivery).
+    3. Resume Semantics: If a prior checkpoint exists for thread_id, execution resumes from the
+       frontier of incomplete nodes without re-executing already completed nodes.
+    4. State Isolation: State across different thread_ids is strictly isolated in storage.
+    5. Serialization: All checkpoint state must serialize to JSON/msgpack primitives.
+    6. Security & Redaction: Secrets, tokens, and credentials are strictly forbidden in checkpoints.
+    7. Head-SHA Safety: Resumed workflows must still verify head_sha == pr.current_head_sha at publication.
+    """
+
+    async def execute_run(
+        self,
+        job: ReviewJob,
+        snapshot: ReviewSnapshot,
+        *,
+        diff_content: str = "",
+        retrieved_evidence: tuple[str, ...] = (),
+        run_deadline_seconds: float | None = None,
+        cancellation_token: bool = False,
+    ) -> ReviewLifecycleState:
+        """Execute the review lifecycle graph across specialists."""
+        ...
 
 
 class DurableJobQueue:
@@ -493,18 +605,20 @@ class ReviewOrchestrator:
         budget_enforcer: Any | None = None,
         cost_ledger: Any | None = None,
         pricing_registry: Any | None = None,
+        checkpointer: Any | None = None,
     ) -> None:
         self.specialist_handlers = dict(specialist_handlers or {})
         self.default_instructions = dict(default_instructions or {})
         self.budget_enforcer = budget_enforcer
         self.cost_ledger = cost_ledger
         self.pricing_registry = pricing_registry
+        self.checkpointer = checkpointer
 
     def register_specialist(self, specialist_type: SpecialistType, handler: SpecialistHandler) -> None:
         """Register a handler for a specific review specialist."""
         self.specialist_handlers[specialist_type] = handler
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> Any:
         """Construct the LangGraph StateGraph review lifecycle."""
         graph = StateGraph(_GraphState)
 
@@ -555,7 +669,15 @@ class ReviewOrchestrator:
         graph.add_edge("documentation_specialist", "evaluate_terminal")
         graph.add_edge("evaluate_terminal", END)
 
-        return graph.compile()
+        return graph.compile(checkpointer=self.checkpointer)
+
+    def get_workflow_state(self, thread_id: str) -> Any | None:
+        """Retrieve current checkpoint state for a thread if a checkpointer is configured."""
+        if self.checkpointer is None:
+            return None
+        app = self._build_graph()
+        config = {"configurable": {"thread_id": thread_id}}
+        return app.get_state(config)
 
     async def execute_run(
         self,
@@ -597,7 +719,11 @@ class ReviewOrchestrator:
         }
 
         app = self._build_graph()
-        final_dict: dict = await app.ainvoke(initial_state)
+        if self.checkpointer is not None:
+            config = {"configurable": {"thread_id": job.job_id}}
+            final_dict: dict = await app.ainvoke(initial_state, config=config)
+        else:
+            final_dict: dict = await app.ainvoke(initial_state)
 
         return ReviewLifecycleState(
             run_id=final_dict["run_id"],
@@ -1107,8 +1233,8 @@ class ReviewWorker:
 
     def __init__(
         self,
-        queue: DurableJobQueue,
-        orchestrator: ReviewOrchestrator,
+        queue: DurableQueueProtocol | DurableJobQueue,
+        orchestrator: WorkflowEngineProtocol | ReviewOrchestrator,
         *,
         budget_config: Any | None = None,
     ) -> None:

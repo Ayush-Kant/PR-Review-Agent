@@ -18,6 +18,7 @@ digraph genesis {
   "file:pr_review_agent/server.py" [label="pr_review_agent/server.py",class="file"];
   "file:pr_review_agent/service_config.py" [label="pr_review_agent/service_config.py",class="file"];
   "file:pr_review_agent/worker.py" [label="pr_review_agent/worker.py",class="file"];
+  "file:scratch/analyze_genesis.py" [label="scratch/analyze_genesis.py",class="file"];
   "file:scratch/dump_forensic_report.py" [label="scratch/dump_forensic_report.py",class="file"];
   "file:scratch/query_case5.py" [label="scratch/query_case5.py",class="file"];
   "file:scripts/evaluate_golden_live.py" [label="scripts/evaluate_golden_live.py",class="file"];
@@ -32,6 +33,7 @@ digraph genesis {
   "file:tests/test_live_golden_evaluation.py" [label="tests/test_live_golden_evaluation.py",class="file"];
   "file:tests/test_live_pr_validation.py" [label="tests/test_live_pr_validation.py",class="file"];
   "file:tests/test_network_adapters.py" [label="tests/test_network_adapters.py",class="file"];
+  "file:tests/test_queue_and_checkpoint_contracts.py" [label="tests/test_queue_and_checkpoint_contracts.py",class="file"];
   "file:tests/test_retrieval_and_findings.py" [label="tests/test_retrieval_and_findings.py",class="file"];
   "file:tests/test_review_orchestration.py" [label="tests/test_review_orchestration.py",class="file"];
   "file:tests/test_security_boundaries.py" [label="tests/test_security_boundaries.py",class="file"];

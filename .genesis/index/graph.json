@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "89b38b957ad625607a7faad0f9f847a2e5aac134",
-  "sourceHash": "dd41ab7b64193c40bf178575e07e27ff898744a5f13b9d5822dd1b8c6501d319",
+  "revision": "f0b8e03faa1e82e4fe40fe9345eb76f654d7115d",
+  "sourceHash": "33ebd1cea4ac4fd3178e9edaed64931073484fcd62c64986959487cb229757a7",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -57,7 +57,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "348d5464d574b9750ba1a102879c6a836d192a58d58472ef8a3351622f959683"
+      "contentHash": "147a19a76909d03233d5d5c41e9cf03406294a5767fb48e1fc47911fb12f28b0"
     },
     {
       "id": "file:pr_review_agent/cost_controls.py",
@@ -117,7 +117,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "2cebf18e5acecb4159ec6ef608bb56317d199a9751c3994f11a09216454eb078"
+      "contentHash": "dd4d879cc8d78c7d4aed165bbb945a668e664051f2e47617ba2ce408db63a22c"
     },
     {
       "id": "file:pr_review_agent/policy.py",
@@ -177,7 +177,17 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "bfcd7f31844972f97c2baf58b1f6e762ad74e77c287e48ed91ff0bf90c548d84"
+      "contentHash": "770a52cef8c75c7ea6ebd74c196ee71e79187b986cf80b4d86f38ba817e0921e"
+    },
+    {
+      "id": "file:scratch/analyze_genesis.py",
+      "type": "file",
+      "label": "scratch/analyze_genesis.py",
+      "path": "scratch/analyze_genesis.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "2439cec88a09b60c9874572aedce5b540fed08c32c163372b6113c8c70bc0ad0"
     },
     {
       "id": "file:scratch/dump_forensic_report.py",
@@ -318,6 +328,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "95094f30111a353bcedc03e903eded8b05a484e2fc221be76df9eb88a1d9147f"
+    },
+    {
+      "id": "file:tests/test_queue_and_checkpoint_contracts.py",
+      "type": "file",
+      "label": "tests/test_queue_and_checkpoint_contracts.py",
+      "path": "tests/test_queue_and_checkpoint_contracts.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "e1524b86193b3b94524b2154e9e2e0fd43904146a2a03abff2abe82a0c7446ab"
     },
     {
       "id": "file:tests/test_retrieval_and_findings.py",

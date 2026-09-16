@@ -1,0 +1,30 @@
+{
+  "task": "queue-checkpoint-adapter-contracts",
+  "gate": "test",
+  "kind": "command",
+  "attempt": "f927ade6-7f9b-4652-a9fc-f384293a5abf",
+  "command": "python -m pytest tests/test_queue_and_checkpoint_contracts.py",
+  "started_at": "2026-09-16T19:43:03.703Z",
+  "observed_at": "2026-09-16T19:43:13.243Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 17 items\r\n\r\ntests\\test_queue_and_checkpoint_contracts.py .................           [100%]\r\n\r\n============================= 17 passed in 3.09s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "f0b8e03faa1e82e4fe40fe9345eb76f654d7115d",
+    "dirty": true
+  },
+  "source_hash": "a0ab4258f7662d8b003a8165bae6c6fa588ea2922331104dc107c05676211558",
+  "before_hash": "a0ab4258f7662d8b003a8165bae6c6fa588ea2922331104dc107c05676211558",
+  "config_hash": "1fd9ea0a31f3c98ccb5629ca485fab773cfc8f1fd8a4fa1edd60090d49aa2d08",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "c74d30b2b061046e1e0889a89f00dd87e3f24e5e3c846158567925c30ab702fb"
+}

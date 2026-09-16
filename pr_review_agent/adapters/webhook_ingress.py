@@ -13,7 +13,7 @@ from starlette.routing import Route
 
 from pr_review_agent.intake import WebhookIntake
 from pr_review_agent.observability import AuditEvent, AuditSpine
-from pr_review_agent.orchestration import DurableJobQueue
+from pr_review_agent.orchestration import DurableJobQueue, DurableQueueProtocol
 
 
 class WebhookIngressHandler:
@@ -23,7 +23,7 @@ class WebhookIngressHandler:
         self,
         webhook_intake: WebhookIntake,
         *,
-        job_queue: DurableJobQueue | None = None,
+        job_queue: DurableQueueProtocol | DurableJobQueue | None = None,
         audit_spine: AuditSpine | None = None,
         policy_version: str = "v1",
         prompt_version: str = "v1",
@@ -131,7 +131,7 @@ class WebhookIngressHandler:
 def create_webhook_app(
     webhook_intake: WebhookIntake,
     *,
-    job_queue: DurableJobQueue | None = None,
+    job_queue: DurableQueueProtocol | DurableJobQueue | None = None,
     audit_spine: AuditSpine | None = None,
     policy_version: str = "v1",
     prompt_version: str = "v1",

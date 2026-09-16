@@ -23,6 +23,7 @@ from pr_review_agent.observability import AuditEvent, AuditSpine
 from pr_review_agent.orchestration import (
     CandidateFinding,
     DurableJobQueue,
+    DurableQueueProtocol,
     JobState,
     ReviewJob,
     ReviewLifecycleState,
@@ -30,6 +31,7 @@ from pr_review_agent.orchestration import (
     SpecialistHandler,
     SpecialistStatus,
     SpecialistType,
+    WorkflowEngineProtocol,
 )
 from pr_review_agent.policy import (
     CanonicalFinding,
@@ -102,8 +104,8 @@ class AutonomousReviewWorker:
         *,
         github_client: GitHubClient | None = None,
         specialist_handlers: Mapping[SpecialistType, SpecialistHandler] | None = None,
-        orchestrator: ReviewOrchestrator | None = None,
-        queue: DurableJobQueue | None = None,
+        orchestrator: WorkflowEngineProtocol | ReviewOrchestrator | None = None,
+        queue: DurableQueueProtocol | DurableJobQueue | None = None,
         audit_spine: AuditSpine | None = None,
         truth_store: ReviewTruthStore | None = None,
         publisher: GitHubReviewPublisher | None = None,

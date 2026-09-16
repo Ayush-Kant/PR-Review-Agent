@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-16T14:04:23.871Z
+- plan approval: Ayush Kant at 2026-09-16T19:39:59.395Z
 
 ## Tasks
 
@@ -126,5 +126,13 @@
 - requirements: FR-16
 - scope: not bounded
 - gates: test: python -m pytest, independent-review: pass
+- next: Run the task pre-flight.
+
+### queue-checkpoint-adapter-contracts — Define durable queue and workflow checkpoint adapter contracts
+
+- state/risk: done / low
+- requirements: FR-03
+- scope: not bounded
+- gates: test: python -m pytest tests/test_queue_and_checkpoint_contracts.py
 - next: Run the task pre-flight.
 
