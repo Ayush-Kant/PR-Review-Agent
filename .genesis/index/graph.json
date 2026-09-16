@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "37d427e4e2ff21795184d6e5ab96b39803e37a0d",
-  "sourceHash": "3dfec515b695a099f4116185e65a85049cee4ac715c8a42e83e0ba5586663094",
+  "revision": "89b38b957ad625607a7faad0f9f847a2e5aac134",
+  "sourceHash": "dd41ab7b64193c40bf178575e07e27ff898744a5f13b9d5822dd1b8c6501d319",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -77,7 +77,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "3c0a1dd7a43c413a8aa619ba6dfe086542f6ce79f42606c3cb10779eae1a9030"
+      "contentHash": "12d185b74f034445c07a2602f2aeb2a09419946efa7a04e7fb5108eebd0f23c6"
     },
     {
       "id": "file:pr_review_agent/github_output.py",
@@ -117,7 +117,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "169c840771751d80084d2ded9260a8039c706835452eae806fcbe1f417ad318d"
+      "contentHash": "2cebf18e5acecb4159ec6ef608bb56317d199a9751c3994f11a09216454eb078"
     },
     {
       "id": "file:pr_review_agent/policy.py",
@@ -180,6 +180,36 @@
       "contentHash": "bfcd7f31844972f97c2baf58b1f6e762ad74e77c287e48ed91ff0bf90c548d84"
     },
     {
+      "id": "file:scratch/dump_forensic_report.py",
+      "type": "file",
+      "label": "scratch/dump_forensic_report.py",
+      "path": "scratch/dump_forensic_report.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "e44feb145f8016fca6c50713ee38638245d7f38cde40efcbf4b12df0f5f5096b"
+    },
+    {
+      "id": "file:scratch/query_case5.py",
+      "type": "file",
+      "label": "scratch/query_case5.py",
+      "path": "scratch/query_case5.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "c1c4af9d628a6e40d8edc590d6d2c852d3ae6e6209f8b9f04458ed01fbc3f5d8"
+    },
+    {
+      "id": "file:scripts/evaluate_golden_live.py",
+      "type": "file",
+      "label": "scripts/evaluate_golden_live.py",
+      "path": "scripts/evaluate_golden_live.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "397fe17acce74525d6b06f60124a00399d257c41ea14f77eb013cf8defeeb4b4"
+    },
+    {
       "id": "file:scripts/evaluate_golden.py",
       "type": "file",
       "label": "scripts/evaluate_golden.py",
@@ -187,7 +217,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "c11d64149e11c595d94a3cde775e71baa194a1bd207b11f6e7f33a9e34de577c"
+      "contentHash": "e0a38c2491a14d6e819b81c2d55c3676cd08a687d97a65523a2b721a7f24ded0"
     },
     {
       "id": "file:scripts/live_pr_review.py",
@@ -260,6 +290,16 @@
       "contentHash": "b0e8795cfcabca7039048d54ba0485a5f3c972219530b9703b81ae311051eb4d"
     },
     {
+      "id": "file:tests/test_live_golden_evaluation.py",
+      "type": "file",
+      "label": "tests/test_live_golden_evaluation.py",
+      "path": "tests/test_live_golden_evaluation.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "72be0f7d27e9171f4262417fbdededbda6437beab705146b9809ec775afa35f9"
+    },
+    {
       "id": "file:tests/test_live_pr_validation.py",
       "type": "file",
       "label": "tests/test_live_pr_validation.py",
@@ -297,7 +337,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "5ca2cb17f1f50af67e87ff07a77ec8aeb6b3ad72b7f39b06a507447ff0fcac60"
+      "contentHash": "e6f8391fea78b47613fa4fe6d57ce1943575674120cc81f824dfe12ffe56a901"
     },
     {
       "id": "file:tests/test_security_boundaries.py",

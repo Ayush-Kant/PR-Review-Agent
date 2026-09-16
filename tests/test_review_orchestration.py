@@ -434,6 +434,76 @@ class ReviewOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state.is_degraded)
         self.assertEqual(0.75, cov.coverage_ratio)
 
+    async def test_terminal_timeout_preserves_explicit_coverage_summary(self) -> None:
+        """Terminal timeout branch must explicitly compute and return coverage_summary.
+
+        Guarantees:
+        - state.coverage_summary is not None
+        - completed specialists remain explicitly represented in succeeded_specialists
+        - non-completed/timed-out specialists are explicitly represented in timeout_specialists
+        - terminal_status remains 'timeout'
+        - is_degraded is True and is_full_coverage is False
+        - aggregation_invoked is False
+        """
+        snapshot = sample_snapshot()
+        job = self.queue.enqueue(snapshot, "delivery-timeout-coverage", deadline_seconds=0.06)
+
+        # Fast specialist that completes immediately without thread hop
+        async def fast_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=inp.specialist_type,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.COMPLETED,
+                findings=(),
+            )
+
+        # Slow specialist that sleeps well past deadline
+        async def slow_handler(inp: SpecialistInput) -> SpecialistOutput:
+            await asyncio.sleep(0.15)
+            return SpecialistOutput(
+                specialist_type=inp.specialist_type,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.COMPLETED,
+                findings=(),
+            )
+
+        self.orchestrator.register_specialist(SpecialistType.SECURITY, fast_handler)
+        self.orchestrator.register_specialist(SpecialistType.QUALITY, fast_handler)
+        self.orchestrator.register_specialist(SpecialistType.TESTS, slow_handler)
+        self.orchestrator.register_specialist(SpecialistType.DOCUMENTATION, slow_handler)
+
+        state = await self.orchestrator.execute_run(
+            job, snapshot, run_deadline_seconds=0.06
+        )
+
+        # 1. Terminal status must remain 'timeout'
+        self.assertEqual("timeout", state.terminal_status)
+        self.assertFalse(state.aggregation_invoked)
+        self.assertTrue(state.is_degraded)
+
+        # 2. Coverage summary MUST NOT be None
+        cov = state.coverage_summary
+        self.assertIsNotNone(cov)
+        self.assertFalse(cov.is_full_coverage)
+        self.assertTrue(cov.is_degraded)
+
+        # 3. Completed specialists must be in succeeded_specialists
+        self.assertIn("security", cov.succeeded_specialists)
+        self.assertIn("quality", cov.succeeded_specialists)
+
+        # 4. Total specialists accounted for
+        self.assertEqual(4, cov.total_specialists)
+        self.assertEqual(len(cov.succeeded_specialists) + len(cov.timeout_specialists) + len(cov.failed_specialists) + len(cov.skipped_specialists), 4)
+
+        # 5. Degradation details must contain serialized coverage_summary
+        self.assertIn("coverage_summary", state.degradation_details)
+        self.assertEqual(state.degradation_details["coverage_summary"]["is_degraded"], True)
+
+        # 6. Audit trail must contain review_run_timeout and specialist_coverage_degraded
+        audit_events = [e.event_name for e in state.audit_trail]
+        self.assertIn("review_run_timeout", audit_events)
+        self.assertIn("specialist_coverage_degraded", audit_events)
+
 
 if __name__ == "__main__":
     unittest.main()

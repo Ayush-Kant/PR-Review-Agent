@@ -796,23 +796,7 @@ class ReviewOrchestrator:
         now = time.time()
         events = []
 
-        if now > state["deadline"]:
-            events.append(
-                AuditEvent(
-                    correlation_id=state["correlation_id"],
-                    event_name="review_run_timeout",
-                    step="evaluate_terminal",
-                    timestamp=now,
-                    details={"deadline": state["deadline"], "now": now},
-                )
-            )
-            return {
-                "step_states": {"specialists_dispatch": "timeout"},
-                "terminal_status": "timeout",
-                "aggregation_invoked": False,
-                "audit_trail": events,
-            }
-
+        is_timeout = now > state["deadline"]
         outputs = state.get("specialist_outputs", {})
         succeeded: list[str] = []
         degraded: list[str] = []
@@ -824,8 +808,12 @@ class ReviewOrchestrator:
         for spec_type in ALL_SPECIALISTS:
             out = outputs.get(spec_type)
             if out is None:
-                skipped.append(spec_type.value)
-                reasons[spec_type.value] = "Specialist omitted or not dispatched"
+                if is_timeout:
+                    timed_out.append(spec_type.value)
+                    reasons[spec_type.value] = "Specialist timed out exceeding deadline"
+                else:
+                    skipped.append(spec_type.value)
+                    reasons[spec_type.value] = "Specialist omitted or not dispatched"
             elif str(out.status) in (SpecialistStatus.COMPLETED.value, "completed"):
                 succeeded.append(spec_type.value)
             elif str(out.status) in (SpecialistStatus.DEGRADED.value, "degraded"):
@@ -844,7 +832,7 @@ class ReviewOrchestrator:
 
         completed_count = len(succeeded)
         total_specialists = len(ALL_SPECIALISTS)
-        is_full_coverage = (completed_count == total_specialists)
+        is_full_coverage = (completed_count == total_specialists) and not is_timeout
         is_run_degraded = (not is_full_coverage) or bool(state.get("is_degraded", False))
         coverage_ratio = round(completed_count / total_specialists, 3) if total_specialists > 0 else 0.0
 
@@ -893,6 +881,27 @@ class ReviewOrchestrator:
                     },
                 )
             )
+
+        if is_timeout:
+            events.append(
+                AuditEvent(
+                    correlation_id=state["correlation_id"],
+                    event_name="review_run_timeout",
+                    step="evaluate_terminal",
+                    timestamp=now,
+                    details={"deadline": state["deadline"], "now": now},
+                )
+            )
+            return {
+                "step_states": {"specialists_dispatch": "timeout"},
+                "terminal_status": "timeout",
+                "is_degraded": True,
+                "degradation_details": updated_degradation_details,
+                "coverage_summary": coverage_summary,
+                "aggregation_invoked": False,
+                "audit_trail": events,
+            }
+
 
         # Cost recording and accounting (FR-19)
         run_cost_summary = None

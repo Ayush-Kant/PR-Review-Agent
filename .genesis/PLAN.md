@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-16T13:21:30.117Z
+- plan approval: Ayush Kant at 2026-09-16T14:04:23.871Z
 
 ## Tasks
 
@@ -116,6 +116,14 @@
 
 - state/risk: done / medium
 - requirements: FR-10
+- scope: not bounded
+- gates: test: python -m pytest, independent-review: pass
+- next: Run the task pre-flight.
+
+### live-golden-evaluation-validation — Validate reviewer severity calibration and golden benchmark against real LLM specialist pipeline in dry-run mode
+
+- state/risk: done / medium
+- requirements: FR-16
 - scope: not bounded
 - gates: test: python -m pytest, independent-review: pass
 - next: Run the task pre-flight.

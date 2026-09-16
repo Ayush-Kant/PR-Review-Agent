@@ -1,0 +1,30 @@
+{
+  "task": "live-golden-evaluation-validation",
+  "gate": "test",
+  "kind": "command",
+  "attempt": "d704f4d5-8168-4f7b-8281-e6f78b2f9c3f",
+  "command": "python -m pytest",
+  "started_at": "2026-09-16T17:01:42.414Z",
+  "observed_at": "2026-09-16T17:02:15.846Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 227 items\r\n\r\ntests\\test_audit_observability_dashboard.py ....................         [  8%]\r\ntests\\test_cost_and_budget_controls.py .................                 [ 16%]\r\ntests\\test_end_to_end_replay.py ...                                      [ 17%]\r\ntests\\test_evaluation_learning_drift.py ...........................      [ 29%]\r\ntests\\test_finding_policy_and_hitl.py ..........................         [ 40%]\r\ntests\\test_github_review_output.py ...............                       [ 47%]\r\ntests\\test_live_golden_evaluation.py ........                            [ 51%]\r\ntests\\test_live_pr_validation.py ...............                         [ 57%]\r\ntests\\test_network_adapters.py ......................................... [ 75%]\r\n...                                                                      [ 77%]\r\ntests\\test_retrieval_and_findings.py ..............                      [ 83%]\r\ntests\\test_review_orchestration.py ...............                       [ 89%]\r\ntests\\test_security_boundaries.py ..................                     [ 97%]\r\ntests\\test_webhook_intake.py .....                                       [100%]\r\n\r\n============================ 227 passed in 18.15s =============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "89b38b957ad625607a7faad0f9f847a2e5aac134",
+    "dirty": true
+  },
+  "source_hash": "391bf604f8e46e8c588d06c481d171ca1db0cade8e6c023d22ac75545d8a2c7a",
+  "before_hash": "391bf604f8e46e8c588d06c481d171ca1db0cade8e6c023d22ac75545d8a2c7a",
+  "config_hash": "e48a7907418a2e4ca0a10c4f7b693bbe9d8c6f9ba99ed5d7d1e23d1c490ad53a",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "7051dc30a029cf9f2f24c3e9b019c5cd1439a5a9d2f5ea4e34181b47dad20deb"
+}

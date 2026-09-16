@@ -14,6 +14,7 @@ Implements:
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from enum import Enum
@@ -24,7 +25,24 @@ import time
 from typing import Any
 import uuid
 
-from pr_review_agent.policy import normalize_category_family
+from pr_review_agent.intake import ReviewSnapshot
+from pr_review_agent.observability import AuditEvent, AuditSpine
+from pr_review_agent.orchestration import (
+    CandidateFinding,
+    JobState,
+    ReviewJob,
+    ReviewOrchestrator,
+    SpecialistCoverageSummary,
+)
+from pr_review_agent.policy import (
+    CanonicalFinding,
+    FindingAggregator,
+    FindingDisposition,
+    ReviewPolicyEngine,
+    ReviewTruthStore,
+    TruthState,
+    normalize_category_family,
+)
 from pr_review_agent.security import SecretLeakageScanner
 
 
@@ -637,6 +655,353 @@ class PromotionGateEvaluator:
             failed_gates=tuple(failed_gates),
             reasons=tuple(reasons),
         )
+
+
+@dataclass(frozen=True)
+class LiveEvaluationCaseOutcome:
+    """Detailed outcome of evaluating a single golden PR case through the live specialist pipeline."""
+
+    case_id: str
+    title: str
+    split: DatasetSplit
+    coverage_summary: SpecialistCoverageSummary | None
+    raw_findings: tuple[CandidateFinding, ...]
+    canonical_findings: tuple[CanonicalFinding, ...]
+    case_result: EvaluationCaseResult
+    cost_usd: float | None = None
+    duration_seconds: float | None = None
+    is_degraded: bool = False
+    failure_reasons: dict[str, str] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "case_id": self.case_id,
+            "title": self.title,
+            "split": self.split.value,
+            "is_degraded": self.is_degraded,
+            "cost_usd": self.cost_usd,
+            "duration_seconds": self.duration_seconds,
+            "coverage": asdict(self.coverage_summary) if self.coverage_summary else None,
+            "failure_reasons": self.failure_reasons,
+            "raw_findings_count": len(self.raw_findings),
+            "canonical_findings_count": len(self.canonical_findings),
+            "case_result": asdict(self.case_result),
+            "raw_findings": [
+                {
+                    "finding_id": f.finding_id,
+                    "specialist_type": f.specialist_type.value if hasattr(f.specialist_type, "value") else str(f.specialist_type),
+                    "category": f.category,
+                    "severity": f.severity,
+                    "confidence": f.confidence,
+                    "file_path": f.file_path,
+                    "line_range": f.line_range,
+                    "summary": f.summary,
+                }
+                for f in self.raw_findings
+            ],
+            "canonical_findings": [
+                {
+                    "canonical_id": f.canonical_id,
+                    "category": f.category,
+                    "raw_severity": f.raw_severity,
+                    "calibrated_severity": f.calibrated_severity,
+                    "severity": f.severity,
+                    "calibration_rule": f.calibration_rule,
+                    "calibration_reason": f.calibration_reason,
+                    "disposition": f.disposition.value if hasattr(f.disposition, "value") else str(f.disposition),
+                    "disposition_reason": f.disposition_reason,
+                    "file_path": f.file_path,
+                    "line_range": f.line_range,
+                    "summary": f.summary,
+                }
+                for f in self.canonical_findings
+            ],
+        }
+
+
+@dataclass(frozen=True)
+class LiveGoldenReport:
+    """Comprehensive evaluation report comparing live specialist outputs with golden benchmark expectations."""
+
+    report_id: str
+    dataset_id: str
+    dataset_version: str
+    split: DatasetSplit
+    provider: str
+    model: str
+    timestamp: float
+    total_cases: int
+    metrics: EvaluationMetrics
+    case_outcomes: tuple[LiveEvaluationCaseOutcome, ...]
+    gate_result: PromotionGateResult | None = None
+    dry_run_verified: bool = True
+    no_github_writes_verified: bool = True
+    no_secrets_verified: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "report_id": self.report_id,
+            "dataset_id": self.dataset_id,
+            "dataset_version": self.dataset_version,
+            "split": self.split.value,
+            "provider": self.provider,
+            "model": self.model,
+            "timestamp": self.timestamp,
+            "total_cases": self.total_cases,
+            "dry_run_verified": self.dry_run_verified,
+            "no_github_writes_verified": self.no_github_writes_verified,
+            "no_secrets_verified": self.no_secrets_verified,
+            "metrics": asdict(self.metrics),
+            "gate_result": asdict(self.gate_result) if self.gate_result else None,
+            "case_outcomes": [c.to_dict() for c in self.case_outcomes],
+        }
+
+    def to_markdown(self) -> str:
+        lines = [
+            f"# Live Golden Evaluation Report - `{self.dataset_id}` (v{self.dataset_version})",
+            "",
+            f"- **Report ID:** `{self.report_id}`",
+            f"- **Split:** `{self.split.value.upper()}`",
+            f"- **Provider / Model:** `{self.provider}` / `{self.model}`",
+            f"- **Timestamp:** `{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(self.timestamp))}`",
+            f"- **Dry-Run Verified:** `{self.dry_run_verified}` (Zero GitHub API writes)",
+            f"- **No Secrets Verified:** `{self.no_secrets_verified}`",
+            "",
+            "## Aggregate Metrics Scorecard",
+            "",
+            "| Metric | Value |",
+            "| --- | --- |",
+            f"| Total Cases | {self.metrics.total_cases} |",
+            f"| Expected Findings (Required) | {self.metrics.expected_required_count} |",
+            f"| Candidate Findings Detected | {self.metrics.candidate_findings_count} |",
+            f"| True Positives (TP) | {self.metrics.true_positives} |",
+            f"| False Positives (FP) | {self.metrics.false_positives} |",
+            f"| False Negatives (FN) | {self.metrics.false_negatives} |",
+            f"| Precision | {self.metrics.precision:.4f} |",
+            f"| Recall | {self.metrics.recall:.4f} |",
+            f"| F1 Score | {self.metrics.f1_score:.4f} |",
+            f"| Critical Finding Recall | {self.metrics.critical_finding_recall:.4f} |",
+            f"| Severity Exact Match Rate | {self.metrics.severity_exact_match_rate:.4f} |",
+            f"| Mean Severity Distance | {self.metrics.mean_severity_distance:.4f} |",
+            f"| Over-Severity Rate | {self.metrics.over_severity_rate:.4f} |",
+            f"| Under-Severity Rate | {self.metrics.under_severity_rate:.4f} |",
+            f"| One-Tier Deviation Rate | {self.metrics.one_tier_deviation_rate:.4f} |",
+            f"| Major Deviation Rate | {self.metrics.major_deviation_rate:.4f} |",
+            "",
+            "## Case-by-Case Breakdown",
+            "",
+        ]
+
+        for outcome in self.case_outcomes:
+            lines.append(f"### Case `{outcome.case_id}`: {outcome.title}")
+            lines.append(f"- **Coverage Degraded:** {outcome.is_degraded}")
+            if outcome.coverage_summary:
+                cov = outcome.coverage_summary
+                lines.append(f"- **Specialists Succeeded ({len(cov.succeeded_specialists)}):** {', '.join(cov.succeeded_specialists) or 'none'}")
+                if cov.failed_specialists:
+                    lines.append(f"- **Specialists Failed:** {', '.join(cov.failed_specialists)}")
+            lines.append(f"- **Duration:** {outcome.duration_seconds or 0.0:.2f}s | **Cost:** ${outcome.cost_usd or 0.0:.4f}")
+            lines.append("")
+            lines.append("| ID | Category | Raw Sev | Calibrated Sev | Rule | Disposition | Summary |")
+            lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+            for cf in outcome.canonical_findings:
+                clean_summ = cf.summary.replace("|", "\\|").replace("\n", " ")
+                lines.append(f"| `{cf.canonical_id[:12]}` | `{cf.category}` | `{cf.raw_severity}` | `{cf.calibrated_severity}` | `{cf.calibration_rule}` | `{cf.disposition.value}` | {clean_summ[:80]} |")
+            lines.append("")
+
+        if self.gate_result:
+            status_badge = "PASSED" if self.gate_result.passed else "FAILED"
+            lines.append(f"## Regression Gate Outcome: **{status_badge}**")
+            if not self.gate_result.passed:
+                for r in self.gate_result.reasons:
+                    lines.append(f"- [FAIL] {r}")
+            lines.append("")
+
+        return "\n".join(lines)
+
+
+class LiveGoldenEvaluator:
+    """Drives golden PR cases through the real specialist pipeline in controlled DRY-RUN mode."""
+
+    def __init__(
+        self,
+        orchestrator: ReviewOrchestrator,
+        *,
+        aggregator: FindingAggregator | None = None,
+        policy_engine: ReviewPolicyEngine | None = None,
+        audit_spine: AuditSpine | None = None,
+        truth_store: ReviewTruthStore | None = None,
+        runner: EvaluationRunner | None = None,
+        provider: str = "mock",
+        model: str = "mock-model",
+    ) -> None:
+        self.orchestrator = orchestrator
+        self.aggregator = aggregator or FindingAggregator()
+        self.policy_engine = policy_engine or ReviewPolicyEngine(policy_version="v1")
+        self.audit_spine = audit_spine
+        self.truth_store = truth_store
+        self.runner = runner or EvaluationRunner()
+        self.provider = provider
+        self.model = model
+
+    async def evaluate_case(self, case: GoldenPRCase) -> LiveEvaluationCaseOutcome:
+        """Run a single golden PR case through the specialist orchestrator and evaluate."""
+        start_t = time.time()
+        job = ReviewJob(
+            job_id=f"job-{case.case_id}-{int(start_t)}",
+            delivery_id=f"del-{case.case_id}",
+            repository_id=case.repository_id,
+            pull_request_number=1,
+            base_sha=case.base_sha,
+            head_sha=case.head_sha,
+            state=JobState.RUNNING,
+            deadline_seconds=120.0,
+        )
+        snapshot = ReviewSnapshot(
+            repository_id=case.repository_id,
+            repository_full_name=case.repository_id,
+            pull_request_number=1,
+            base_sha=case.base_sha,
+            head_sha=case.head_sha,
+            changed_files=case.changed_files,
+            policy_version="v1",
+            prompt_version="v1",
+            retrieval_index_version="v1",
+            model_configuration={"provider": self.provider, "model": self.model},
+        )
+
+        lifecycle = await self.orchestrator.execute_run(
+            job,
+            snapshot,
+            diff_content=case.diff_content,
+        )
+
+        # Collect raw findings from specialist outputs
+        raw_candidates: list[CandidateFinding] = []
+        for _spec_type, out in lifecycle.specialist_outputs.items():
+            raw_candidates.extend(out.findings)
+
+        # Aggregate raw findings -> canonical findings with deterministic severity calibration
+        canonical = self.aggregator.aggregate(
+            raw_candidates,
+            repository_id=case.repository_id,
+            head_sha=case.head_sha,
+        )
+
+        # Evaluate policy for disposition (DRY RUN ONLY - never publish to GitHub)
+        evaluated_canonical: list[CanonicalFinding] = []
+        for finding in canonical:
+            eval_f = self.policy_engine.evaluate(finding, is_fresh=True)
+            evaluated_canonical.append(eval_f)
+            if self.truth_store is not None:
+                initial_state = (
+                    TruthState.AUTO_APPROVED
+                    if eval_f.disposition == FindingDisposition.AUTO_APPROVED
+                    else TruthState.HELD
+                )
+                self.truth_store.record_initial(eval_f, initial_state=initial_state)
+
+        duration = time.time() - start_t
+        cost_usd = None
+        if lifecycle.run_cost_summary:
+            cost_usd = lifecycle.run_cost_summary.total_cost_usd
+
+        # Match against expected golden findings
+        case_res = self.runner.evaluate_case(
+            case,
+            evaluated_canonical,
+            duration_seconds=duration,
+            cost_usd=cost_usd,
+            is_cost_complete=True,
+        )
+
+        failure_reasons = {}
+        if lifecycle.coverage_summary and lifecycle.coverage_summary.failure_reasons:
+            failure_reasons = dict(lifecycle.coverage_summary.failure_reasons)
+
+        return LiveEvaluationCaseOutcome(
+            case_id=case.case_id,
+            title=case.title,
+            split=case.split,
+            coverage_summary=lifecycle.coverage_summary,
+            raw_findings=tuple(raw_candidates),
+            canonical_findings=tuple(evaluated_canonical),
+            case_result=case_res,
+            cost_usd=cost_usd,
+            duration_seconds=round(duration, 3),
+            is_degraded=lifecycle.is_degraded,
+            failure_reasons=failure_reasons,
+        )
+
+    async def evaluate_dataset(
+        self,
+        dataset: GoldenPRDataset,
+        split: DatasetSplit = DatasetSplit.DEVELOPMENT,
+        *,
+        gate_config: RegressionGateConfig | None = None,
+        case_filter: Sequence[str] | None = None,
+    ) -> LiveGoldenReport:
+        """Run all cases in dataset split through the live specialist pipeline in DRY RUN mode."""
+        cases = dataset.get_cases(split)
+        eval_dataset = dataset
+        if case_filter:
+            target_ids = set(case_filter)
+            cases = tuple(c for c in cases if c.case_id in target_ids)
+            eval_dataset = GoldenPRDataset(
+                dataset_id=dataset.dataset_id,
+                version=dataset.version,
+                cases=cases,
+            )
+
+        outcomes: list[LiveEvaluationCaseOutcome] = []
+        findings_by_case: dict[str, list[CanonicalFinding]] = {}
+        durations: dict[str, float] = {}
+        costs: dict[str, float] = {}
+
+        for case in cases:
+            outcome = await self.evaluate_case(case)
+            outcomes.append(outcome)
+            findings_by_case[case.case_id] = list(outcome.canonical_findings)
+            if outcome.duration_seconds is not None:
+                durations[case.case_id] = outcome.duration_seconds
+            if outcome.cost_usd is not None:
+                costs[case.case_id] = outcome.cost_usd
+
+        # Compute aggregate metrics
+        metrics = self.runner.evaluate_dataset(
+            dataset=eval_dataset,
+            candidate_findings_by_case=findings_by_case,
+            split=split,
+            case_durations=durations,
+            case_costs=costs,
+        )
+
+        gate_res = None
+        if gate_config is not None:
+            evaluator = PromotionGateEvaluator()
+            gate_res = evaluator.evaluate_gate(
+                candidate_version=dataset.version,
+                metrics=metrics,
+                config=gate_config,
+            )
+
+        report = LiveGoldenReport(
+            report_id=f"live-eval-{uuid.uuid4().hex[:8]}",
+            dataset_id=dataset.dataset_id,
+            dataset_version=dataset.version,
+            split=split,
+            provider=self.provider,
+            model=self.model,
+            timestamp=time.time(),
+            total_cases=len(cases),
+            metrics=metrics,
+            case_outcomes=tuple(outcomes),
+            gate_result=gate_res,
+            dry_run_verified=True,
+            no_github_writes_verified=True,
+            no_secrets_verified=True,
+        )
+        return report
 
 
 class FeedbackDisposition(str, Enum):

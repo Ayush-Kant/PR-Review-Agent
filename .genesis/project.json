@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-16T13:40:37.933Z"
+    "updated_at": "2026-09-16T17:28:23.868Z"
   },
   "policy": {
     "ponytail": "full",
@@ -87,14 +87,14 @@
       ]
     },
     "plan_check": {
-      "at": "2026-09-16T13:21:23.600Z",
-      "source_hash": "3d56be49c198fe87f7a178a119938a218ddb1e4ad561dc3f88f04dedcadd862a"
+      "at": "2026-09-16T14:04:13.901Z",
+      "source_hash": "222544f1a8e59633cc9fde72dad2296bc3c339fb26146c128d8afb53c60b19fe"
     },
     "plan_approval": {
       "human": "Ayush Kant",
-      "reason": "Reviewer quality calibration and golden benchmark suite",
-      "at": "2026-09-16T13:21:30.117Z",
-      "source_hash": "3d56be49c198fe87f7a178a119938a218ddb1e4ad561dc3f88f04dedcadd862a"
+      "reason": "Approve plan with live-golden-evaluation-validation task",
+      "at": "2026-09-16T14:04:23.871Z",
+      "source_hash": "222544f1a8e59633cc9fde72dad2296bc3c339fb26146c128d8afb53c60b19fe"
     }
   },
   "artifacts": [
@@ -1419,6 +1419,95 @@
         "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
         "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
       }
+    },
+    {
+      "id": "live-golden-evaluation-validation",
+      "outcome": "Validate reviewer severity calibration and golden benchmark against real LLM specialist pipeline in dry-run mode",
+      "state": "done",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-16"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "test",
+          "kind": "command",
+          "command": "python -m pytest",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/live-golden-evaluation-validation-test-d704f4d5-8168-4f7b-8281-e6f78b2f9c3f.json",
+            "hash": "7051dc30a029cf9f2f24c3e9b019c5cd1439a5a9d2f5ea4e34181b47dad20deb",
+            "source_hash": "391bf604f8e46e8c588d06c481d171ca1db0cade8e6c023d22ac75545d8a2c7a",
+            "config_hash": "e48a7907418a2e4ca0a10c4f7b693bbe9d8c6f9ba99ed5d7d1e23d1c490ad53a",
+            "observed_at": "2026-09-16T17:02:15.846Z"
+          }
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/live-golden-evaluation-validation-independent-review-6cf3d81d-d21f-4fde-ae5e-b3957ab8d4df.json",
+            "hash": "fad7aa70bec16ce940083fd7de035f913dfba2686f9a34a069d1db6397a6d9cf",
+            "source_hash": "391bf604f8e46e8c588d06c481d171ca1db0cade8e6c023d22ac75545d8a2c7a",
+            "config_hash": "e48a7907418a2e4ca0a10c4f7b693bbe9d8c6f9ba99ed5d7d1e23d1c490ad53a",
+            "observed_at": "2026-09-16T17:26:32.275Z"
+          }
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-16T14:04:06.702Z",
+      "updated_at": "2026-09-16T17:27:18.145Z",
+      "base_manifest": {
+        ".gitignore": "dc961659055b943bf2425da012d0fece8f2543d58d0e5936573a91e1c0455f15",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "data/golden_prs_v1.json": "f33b15ffb7155f217f3201ee91e701657ccf810b2d22763c23060574286097a6",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/adapters/__init__.py": "0be5bd131c0c2e1610fc0b1cd144260beb00030381d3d47575e9452b4ecf2ab4",
+        "pr_review_agent/adapters/github.py": "1f6b8ac760c3713dda0f885cc5fe5936baa4fb43a3c4c7da3d21f6f60b9a0789",
+        "pr_review_agent/adapters/llm.py": "aedf3aa9f2860b832d860f6365ac45203cae99181c4cd6a6a51045a51cb686ca",
+        "pr_review_agent/adapters/webhook_ingress.py": "5611ad1f00c56c4ac5f70be9854f2c6ffc1e94d5231044a8a4a404a5ca054c2f",
+        "pr_review_agent/cost_controls.py": "b55e03c0e86b9add48d9d7b28e3d8bca3f034ca7bec177cf2dd0245150f60d2e",
+        "pr_review_agent/evaluation.py": "36ca0409a0d53087c6dcf8b1abbb36edd03f96208937ac45811b2184739fc7ee",
+        "pr_review_agent/github_output.py": "ef66bd4121b68bb1d44e6ab3ea110746404dd05fb936d00fca957491fc370e60",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/observability.py": "4b390b10e46c076af045814953c9a4f57ebd86149addd8f8fcf63dfda50b57eb",
+        "pr_review_agent/orchestration.py": "269c21a7b8f2748067ba638eeec100a67009f561d2a0bd4045f958d264b6a38e",
+        "pr_review_agent/policy.py": "700b96655fbf936c608b724bc2cad99d944a2154025382253a651ea45ed20c28",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "pr_review_agent/security.py": "273fc57ed51b7e7110669c9416211ed1f174c33d959d38053c9196972da05021",
+        "pr_review_agent/server.py": "1dacb5ec685e4c597c2073b22cb38ebf3d51b1162b7b9fb221cb75ebce0048ea",
+        "pr_review_agent/service_config.py": "e8efabe2b6ef5ae5e41f61af42243ec4919a435a460787094c253f781769f84f",
+        "pr_review_agent/worker.py": "936181235d6d37163e958e4ec7743d70c07367ed5d49b8095701cdc5e2f7e6ee",
+        "scripts/evaluate_golden.py": "891e3e86d77815ee1c1beaebf3bbf3bd1da5b7788bcd9f0583f405b287477140",
+        "scripts/live_pr_review.py": "045a9308c59507645cbcc093959ec21b3b6f92c9dc9062fbadcf9d231710942b",
+        "tests/test_audit_observability_dashboard.py": "6b2982f18570ad0ee42cc475a2639ae914d4df80cf7f6bbb76fb74775a75bfdc",
+        "tests/test_cost_and_budget_controls.py": "07813b8f14603149306d1366517d2dde124be70552f96f26b914a0b45cdc639e",
+        "tests/test_end_to_end_replay.py": "7894afcf7427c7d408e747f72520ddd01f19060b6494ae158da19790b3129dd8",
+        "tests/test_evaluation_learning_drift.py": "3406db6541bd758c0679083078635f71a3d09c3d2e0454c081e86e216233c5ca",
+        "tests/test_finding_policy_and_hitl.py": "26c1c45b059831cd2b4f89ffc1ea34b9a72b5da9813dba8b1565b94331b10a39",
+        "tests/test_github_review_output.py": "40e2ae39b0edec6da8cbe268b27a626ad8d60336f1d110d547f0bfb948f37b7a",
+        "tests/test_live_pr_validation.py": "52e80d253f8bded9272237e81bf488832b786efc6323b7e42fdcce91c7f01258",
+        "tests/test_network_adapters.py": "527bfa5bda19446296d36d5d4b9d75583d561af320329446174f3f07b94ecb38",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "d6181800eaa24dcc98e97b074f4ca17adf2ef3d1740a064e3e0f427787807944",
+        "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     }
   ],
   "learning_proposals": [],
@@ -1548,6 +1637,15 @@
       "task": "quality-calibration-golden-benchmark",
       "human": "Ayush Kant",
       "reason": "Verified: calibration does not suppress real security/correctness findings, raw severity remains traceable, calibrated severity is deterministic, HITL behavior preserved, auto-pub cannot be bypassed, evaluator matching is sound, golden data contains zero secrets, no scope creep.",
+      "revision": null
+    },
+    {
+      "id": "6cf3d81d-d21f-4fde-ae5e-b3957ab8d4df",
+      "at": "2026-09-16T17:26:32.275Z",
+      "action": "approve",
+      "task": "live-golden-evaluation-validation",
+      "human": "Ayush Kant",
+      "reason": "Verified live golden evaluation, dry-run publication safety, benchmark integrity, severity calibration behavior, specialist reliability, and timeout coverage hardening; 227/227 tests pass.",
       "revision": null
     }
   ],
@@ -2415,6 +2513,30 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-16T13:39:56.583Z"
+    },
+    {
+      "id": "d704f4d5-8168-4f7b-8281-e6f78b2f9c3f",
+      "task": "live-golden-evaluation-validation",
+      "kind": "gate",
+      "command": "python -m pytest",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 29424,
+      "child_pid": 14380,
+      "started_at": "2026-09-16T17:01:42.414Z",
+      "status": "passed",
+      "before_hash": "391bf604f8e46e8c588d06c481d171ca1db0cade8e6c023d22ac75545d8a2c7a",
+      "config_hash": "e48a7907418a2e4ca0a10c4f7b693bbe9d8c6f9ba99ed5d7d1e23d1c490ad53a",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-16T17:02:15.846Z"
     }
   ],
   "authorizations": [],
@@ -2422,11 +2544,11 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-16T13:40:37.750Z",
+    "at": "2026-09-16T17:28:23.312Z",
     "revision": {
-      "commit": "37d427e4e2ff21795184d6e5ab96b39803e37a0d",
+      "commit": "89b38b957ad625607a7faad0f9f847a2e5aac134",
       "dirty": true,
-      "source_hash": "4047f5cd97915c69fb686742d6fd0ca6d4fc33fe143d2b3a4594c97819241b37"
+      "source_hash": "391bf604f8e46e8c588d06c481d171ca1db0cade8e6c023d22ac75545d8a2c7a"
     },
     "active_task": null,
     "next_action": "Review completed work and choose the next bounded outcome."
