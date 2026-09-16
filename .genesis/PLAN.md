@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Developer at 2026-09-15T20:20:50.582Z
+- plan approval: Ayush Kant at 2026-09-16T12:17:28.804Z
 
 ## Tasks
 
@@ -102,5 +102,13 @@
 - requirements: FR-09
 - scope: not bounded
 - gates: contract: python -m pytest tests/test_finding_policy_and_hitl.py tests/test_live_pr_validation.py, independent-review: pass
+- next: Run the task pre-flight.
+
+### specialist-reliability-hardening — Distinguish specialist success from degradation, track coverage, and harden retry and output parsing
+
+- state/risk: done / low
+- requirements: FR-05
+- scope: not bounded
+- gates: test: python -m pytest
 - next: Run the task pre-flight.
 

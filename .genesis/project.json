@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-15T20:46:53.235Z"
+    "updated_at": "2026-09-16T12:23:27.894Z"
   },
   "policy": {
     "ponytail": "full",
@@ -34,7 +34,7 @@
     "type": "new-product",
     "started_at": "2026-09-14T14:19:56.410Z",
     "spec_check": {
-      "at": "2026-09-14T15:27:48.610Z",
+      "at": "2026-09-16T11:06:04.232Z",
       "source_hash": "8565408645dabdf0114c496731bcb0f2b5b052bc23cda1b6a25cda076fd6153c",
       "requirements": [
         "AC-01",
@@ -87,14 +87,14 @@
       ]
     },
     "plan_check": {
-      "at": "2026-09-15T20:20:45.663Z",
-      "source_hash": "1db63ab79fdb099c561f960342580d77b3f5f0da614aaf6edc1fda36c5a63293"
+      "at": "2026-09-16T12:16:59.208Z",
+      "source_hash": "32984bde648644c5f7b1a9ad26050d05516f329819b5633c99b73beff3c485a8"
     },
     "plan_approval": {
-      "human": "Developer",
-      "reason": "Approved review-hardening task",
-      "at": "2026-09-15T20:20:50.582Z",
-      "source_hash": "1db63ab79fdb099c561f960342580d77b3f5f0da614aaf6edc1fda36c5a63293"
+      "human": "Ayush Kant",
+      "reason": "Specialist reliability and execution hardening",
+      "at": "2026-09-16T12:17:28.804Z",
+      "source_hash": "32984bde648644c5f7b1a9ad26050d05516f329819b5633c99b73beff3c485a8"
     }
   },
   "artifacts": [
@@ -155,8 +155,8 @@
       "source_hash": "8565408645dabdf0114c496731bcb0f2b5b052bc23cda1b6a25cda076fd6153c",
       "approval": {
         "human": "Ayush Kant",
-        "reason": "Approved after review of the 47 checked requirements and the recorded product decisions.",
-        "at": "2026-09-14T15:28:29.694Z",
+        "reason": "Specialist reliability and execution hardening",
+        "at": "2026-09-16T11:06:37.475Z",
         "source_hash": "8565408645dabdf0114c496731bcb0f2b5b052bc23cda1b6a25cda076fd6153c"
       }
     }
@@ -312,9 +312,9 @@
           "status": "pass",
           "evidence": {
             "human": "Ayush Kant",
-            "reason": "Approved after review of the 47 checked requirements and the recorded product decisions.",
-            "source_hash": "357005ce177c8840585865a6d7db234f62b15918149b7f800b81c972e09a889c",
-            "observed_at": "2026-09-14T15:28:29.694Z"
+            "reason": "Specialist reliability and execution hardening",
+            "source_hash": "e793f43da2d573201812984a68fbdc06ef43fe798518f20b1268f0fa5b76c369",
+            "observed_at": "2026-09-16T11:06:37.475Z"
           },
           "kind": "review"
         }
@@ -325,7 +325,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-14T14:19:56.410Z",
-      "updated_at": "2026-09-14T15:28:29.694Z"
+      "updated_at": "2026-09-16T11:06:37.475Z"
     },
     {
       "id": "intake-idempotency",
@@ -1258,6 +1258,80 @@
         "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
         "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
       }
+    },
+    {
+      "id": "specialist-reliability-hardening",
+      "outcome": "Distinguish specialist success from degradation, track coverage, and harden retry and output parsing",
+      "state": "done",
+      "risk": "low",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-05"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "test",
+          "kind": "command",
+          "command": "python -m pytest",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/specialist-reliability-hardening-test-43e60785-673b-4d54-b384-f0462183fb3b.json",
+            "hash": "e2aa74fa3740db81fca4799c12778233a8bda44f9445bae5f5639b654d1dc27b",
+            "source_hash": "6d7302876e60dd393467ef87bd4bc6a059d9a130732fe275d5779fba4c8da513",
+            "config_hash": "a74b6bd226f378ee52ad5fcd408db84a3797ace627e3cfe5f9a84b9f450dfb59",
+            "observed_at": "2026-09-16T12:19:19.168Z"
+          }
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-16T11:06:43.826Z",
+      "updated_at": "2026-09-16T12:19:53.533Z",
+      "base_manifest": {
+        ".gitignore": "91d1a6b733a46ca657ca9f148c7a86c4b5e4a810c3a48d13614e839a9993bcc4",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "live_pr_review.db": "14b6ff8d78401c44d2f6d75ac70a8e4addb80c9f2035b1693b450c260d0e388e",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/adapters/__init__.py": "0be5bd131c0c2e1610fc0b1cd144260beb00030381d3d47575e9452b4ecf2ab4",
+        "pr_review_agent/adapters/github.py": "1f6b8ac760c3713dda0f885cc5fe5936baa4fb43a3c4c7da3d21f6f60b9a0789",
+        "pr_review_agent/adapters/llm.py": "a18b098240df37cb0e12aa0f1df2d4ab2094b47fad6bd87728d26399655f0d7c",
+        "pr_review_agent/adapters/webhook_ingress.py": "5611ad1f00c56c4ac5f70be9854f2c6ffc1e94d5231044a8a4a404a5ca054c2f",
+        "pr_review_agent/cost_controls.py": "b55e03c0e86b9add48d9d7b28e3d8bca3f034ca7bec177cf2dd0245150f60d2e",
+        "pr_review_agent/evaluation.py": "d7635a8f68014ef1ccfde8e167b7a30ae04a1314e7f82ed71d472c795fccbe85",
+        "pr_review_agent/github_output.py": "ef66bd4121b68bb1d44e6ab3ea110746404dd05fb936d00fca957491fc370e60",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/observability.py": "73f34d5a5d3c99a69e2016657277fc89d1f41ae87a4b49557cf57a7c9acc17f7",
+        "pr_review_agent/orchestration.py": "c1ac56039f5ce26e06e30a401c3adfeb5bbe36b7284c8e9667107f16ab7ab0b5",
+        "pr_review_agent/policy.py": "887bb71329a26b559c2eaf30ee0f3b82684c2662d4c628eb0c07fd041a3d3abb",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "pr_review_agent/security.py": "273fc57ed51b7e7110669c9416211ed1f174c33d959d38053c9196972da05021",
+        "pr_review_agent/server.py": "1dacb5ec685e4c597c2073b22cb38ebf3d51b1162b7b9fb221cb75ebce0048ea",
+        "pr_review_agent/service_config.py": "e8efabe2b6ef5ae5e41f61af42243ec4919a435a460787094c253f781769f84f",
+        "pr_review_agent/worker.py": "f69e86e45fc5d14f100188196fce2ff8d9df8dfb00f0ff52bffe858116634490",
+        "scripts/live_pr_review.py": "776ab6c6e56257a5438c65ee2a2e9872310da8234fede0a35e8d6d352f57edb6",
+        "tests/test_audit_observability_dashboard.py": "6b2982f18570ad0ee42cc475a2639ae914d4df80cf7f6bbb76fb74775a75bfdc",
+        "tests/test_cost_and_budget_controls.py": "07813b8f14603149306d1366517d2dde124be70552f96f26b914a0b45cdc639e",
+        "tests/test_end_to_end_replay.py": "7894afcf7427c7d408e747f72520ddd01f19060b6494ae158da19790b3129dd8",
+        "tests/test_evaluation_learning_drift.py": "3207ef8d4c0165f30057b28065627685932fe079ead1febdd428b124e91eb854",
+        "tests/test_finding_policy_and_hitl.py": "94c57465812595c556692fd79149c6d035599069c71feee6e4661f72931d4ce9",
+        "tests/test_github_review_output.py": "40e2ae39b0edec6da8cbe268b27a626ad8d60336f1d110d547f0bfb948f37b7a",
+        "tests/test_live_pr_validation.py": "79879fdfe50a8bf8d268f93c0e4a53b7b9c8dc01626aade3a57ae1b6956e0079",
+        "tests/test_network_adapters.py": "39dcf33ed1a628ed5a472e72044f2bf855eed8b9193e3ec6f37afdc39ca0646e",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "e6ed62d302b728d78cc7ee9490a3f09b9f2be74967e45365ff5b2da95f3a7783",
+        "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     }
   ],
   "learning_proposals": [],
@@ -1369,6 +1443,15 @@
       "task": "review-hardening",
       "human": "Ayush Kant",
       "reason": "Validated semantic finding deduplication, deterministic canonical IDs, security prompt calibration, and durable SQLite publication idempotency with 190 passing tests",
+      "revision": null
+    },
+    {
+      "id": "5859fb22-1221-480f-84fe-0908db5be097",
+      "at": "2026-09-16T12:18:24.531Z",
+      "action": "resume",
+      "task": "specialist-reliability-hardening",
+      "human": null,
+      "reason": null,
       "revision": null
     }
   ],
@@ -2140,6 +2223,54 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-15T20:46:08.069Z"
+    },
+    {
+      "id": "7d1727ec-4ab7-4654-8651-9835a63c3a29",
+      "task": "specialist-reliability-hardening",
+      "kind": "gate",
+      "command": "pytest",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 23864,
+      "child_pid": 16260,
+      "started_at": "2026-09-16T12:13:39.268Z",
+      "status": "failed",
+      "before_hash": "6d7302876e60dd393467ef87bd4bc6a059d9a130732fe275d5779fba4c8da513",
+      "config_hash": "dfa7fc7b9abcfba1491feb37e9f290aa3dde426852a2376de297e3028c9637c3",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": "command-failed",
+      "ended_at": "2026-09-16T12:13:55.443Z"
+    },
+    {
+      "id": "43e60785-673b-4d54-b384-f0462183fb3b",
+      "task": "specialist-reliability-hardening",
+      "kind": "gate",
+      "command": "python -m pytest",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 14036,
+      "child_pid": 17388,
+      "started_at": "2026-09-16T12:19:00.508Z",
+      "status": "passed",
+      "before_hash": "6d7302876e60dd393467ef87bd4bc6a059d9a130732fe275d5779fba4c8da513",
+      "config_hash": "a74b6bd226f378ee52ad5fcd408db84a3797ace627e3cfe5f9a84b9f450dfb59",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-16T12:19:19.168Z"
     }
   ],
   "authorizations": [],
@@ -2147,11 +2278,11 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-15T20:46:53.058Z",
+    "at": "2026-09-16T12:23:27.447Z",
     "revision": {
-      "commit": "8dee00e1d0afc10ea44d4561f10d02488dc88f4d",
+      "commit": "32f608021330954a3eeb9cc7207e2d90a18b66b0",
       "dirty": true,
-      "source_hash": "5af3a1f84ada420fa5e33e930025bfcac2d6c7a796eb3a035f974e488e4a7f7a"
+      "source_hash": "80f3b9803eccd50c2f24caddd58ce252924fa1cb3e883e22949018407d6433b3"
     },
     "active_task": null,
     "next_action": "Review completed work and choose the next bounded outcome."

@@ -17,6 +17,7 @@ build/
 venv/
 
 *.log
+*.db
 
 .DS_Store
 Thumbs.db

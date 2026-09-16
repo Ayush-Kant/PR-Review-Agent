@@ -31,6 +31,7 @@ from pr_review_agent.orchestration import (
     SpecialistHandler,
     SpecialistInput,
     SpecialistOutput,
+    SpecialistStatus,
     SpecialistType,
 )
 from pr_review_agent.policy import (
@@ -783,3 +784,162 @@ def test_live_harness_uses_configured_database_path(monkeypatch: pytest.MonkeyPa
     row = check_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='review_truth'").fetchone()
     assert row is not None
     check_conn.close()
+
+
+@pytest.mark.anyio
+async def test_worker_propagation_degraded_coverage() -> None:
+    """Test J: Degraded specialist coverage propagates into worker lifecycle and audit trail."""
+    conn = sqlite3.connect(":memory:")
+    queue = DurableJobQueue(conn)
+    spine = AuditSpine(conn)
+    truth = ReviewTruthStore(conn)
+    cfg = _make_dummy_service_config()
+
+    # Create 4 handlers: 2 succeed (with findings), 2 fail
+    def make_handler(spec_type: SpecialistType, status: SpecialistStatus, findings: tuple[CandidateFinding, ...] = ()):
+        def handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=spec_type,
+                correlation_id=inp.correlation_id,
+                status=status,
+                findings=findings,
+                error_message="Rate limit 429" if status != SpecialistStatus.COMPLETED else None,
+            )
+        return handler
+
+    finding_sec = CandidateFinding(
+        finding_id="cand-sec-1",
+        correlation_id="corr-worker-deg",
+        specialist_type=SpecialistType.SECURITY,
+        category="security_vulnerability",
+        severity="medium",
+        confidence=0.9,
+        summary="Potential SQL Injection",
+        rationale="Raw concatenation",
+        file_path="db.py",
+        line_range=(10, 12),
+    )
+
+    handlers = {
+        SpecialistType.SECURITY: make_handler(SpecialistType.SECURITY, SpecialistStatus.COMPLETED, (finding_sec,)),
+        SpecialistType.QUALITY: make_handler(SpecialistType.QUALITY, SpecialistStatus.COMPLETED, ()),
+        SpecialistType.TESTS: make_handler(SpecialistType.TESTS, SpecialistStatus.FAILED, ()),
+        SpecialistType.DOCUMENTATION: make_handler(SpecialistType.DOCUMENTATION, SpecialistStatus.FAILED, ()),
+    }
+
+    orchestrator = ReviewOrchestrator(specialist_handlers=handlers)
+    fake_gh = FakeGitHubClient()
+    fake_gh.set_head_sha("octocat/hello-world", 42, "head123")
+
+    worker = AutonomousReviewWorker(
+        config=cfg,
+        connection=conn,
+        github_client=fake_gh,
+        orchestrator=orchestrator,
+        queue=queue,
+        audit_spine=spine,
+        truth_store=truth,
+    )
+
+    snapshot = ReviewSnapshot(
+        repository_id="octocat/hello-world",
+        repository_full_name="octocat/hello-world",
+        pull_request_number=42,
+        base_sha="base000",
+        head_sha="head123",
+        changed_files=("db.py",),
+        policy_version="v1",
+        prompt_version="v1",
+        retrieval_index_version="v1",
+        model_configuration={"provider": "test"},
+    )
+    job = queue.enqueue(snapshot, delivery_id="delivery-worker-deg")
+
+    processed_job, lifecycle_state = await worker.process_one_job()
+
+    assert processed_job is not None
+    assert lifecycle_state is not None
+    assert lifecycle_state.is_degraded is True
+    assert lifecycle_state.coverage_summary is not None
+    assert lifecycle_state.coverage_summary.coverage_ratio == 0.5
+    assert len(lifecycle_state.coverage_summary.failed_specialists) == 2
+
+    # Verify worker_job_completed event in audit spine preserves degradation
+    events = spine.get_events("delivery-worker-deg")
+    completed_events = [e for e in events if e.event_name == "worker_job_completed"]
+    assert len(completed_events) == 1
+    cmp_evt = completed_events[0]
+    assert cmp_evt.details["is_degraded"] is True
+    assert cmp_evt.details["coverage"]["is_degraded"] is True
+    assert cmp_evt.details["coverage"]["coverage_ratio"] == 0.5
+    assert "tests" in cmp_evt.details["coverage"]["failed"]
+    assert "documentation" in cmp_evt.details["coverage"]["failed"]
+
+    conn.close()
+
+
+def test_live_harness_reports_degraded_coverage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test K: Live harness reports degraded coverage when specialists fail and emits specialist_coverage_degraded."""
+    from scripts.live_pr_review import run_live_review
+
+    test_db = str(tmp_path / "degraded_harness.db")
+    monkeypatch.setenv("ENABLE_LIVE_GITHUB_TEST", "1")
+    monkeypatch.setenv("PUBLISH_LIVE_REVIEW", "0")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_fake123456789012345678901234567890")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "octocat/hello-world")
+    monkeypatch.setenv("GITHUB_PR_NUMBER", "42")
+    monkeypatch.setenv("MODEL_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-fake12345678901234567890")
+    monkeypatch.setenv("DATABASE_PATH", test_db)
+
+    mock_gh = FakeGitHubClient()
+    mock_gh.set_head_sha("octocat/hello-world", 42, "headsha123")
+    mock_gh.get_pull_request = lambda repo, pr: {  # type: ignore[assignment]
+        "head": {"sha": "headsha123"},
+        "base": {"sha": "basesha123"},
+        "title": "Test PR",
+    }
+    mock_gh.get_pull_request_diff = lambda repo, pr: "diff --git a/foo.py b/foo.py\n..."  # type: ignore[assignment]
+
+    class MockDegradedAdapter:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __call__(self, spec_input: SpecialistInput) -> SpecialistOutput:
+            if spec_input.specialist_type in (SpecialistType.SECURITY, SpecialistType.QUALITY):
+                return SpecialistOutput(
+                    specialist_type=spec_input.specialist_type,
+                    correlation_id=spec_input.correlation_id,
+                    status="completed",
+                    findings=(),
+                )
+            else:
+                return SpecialistOutput(
+                    specialist_type=spec_input.specialist_type,
+                    correlation_id=spec_input.correlation_id,
+                    status="failed",
+                    findings=(),
+                    error_message="HTTP 429 rate limit exceeded",
+                )
+
+    monkeypatch.setattr("scripts.live_pr_review.GitHubNetworkClient", lambda sec_config: mock_gh)
+    monkeypatch.setattr("scripts.live_pr_review.LLMSpecialistAdapter", MockDegradedAdapter)
+
+    ret = run_live_review()
+    assert ret == 0
+
+    # Query audit spine to verify specialist_coverage_degraded was recorded
+    conn = sqlite3.connect(test_db)
+    spine = AuditSpine(conn)
+    cursor = conn.execute("SELECT event_name, details_json FROM audit_events WHERE event_name = 'specialist_coverage_degraded'")
+    row = cursor.fetchone()
+    assert row is not None, "specialist_coverage_degraded event must be recorded when coverage is degraded"
+    details = json.loads(row[1])
+    assert details["is_full_coverage"] is False
+    assert details["coverage_ratio"] == 0.5
+    assert "security" in details["succeeded"]
+    assert "quality" in details["succeeded"]
+    assert "tests" in details["failed"]
+    assert "documentation" in details["failed"]
+    assert "rate limit" in details["failure_reasons"]["tests"].lower()
+    conn.close()

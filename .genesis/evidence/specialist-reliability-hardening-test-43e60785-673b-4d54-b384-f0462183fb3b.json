@@ -1,0 +1,30 @@
+{
+  "task": "specialist-reliability-hardening",
+  "gate": "test",
+  "kind": "command",
+  "attempt": "43e60785-673b-4d54-b384-f0462183fb3b",
+  "command": "python -m pytest",
+  "started_at": "2026-09-16T12:19:00.508Z",
+  "observed_at": "2026-09-16T12:19:19.168Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 205 items\r\n\r\ntests\\test_audit_observability_dashboard.py ....................         [  9%]\r\ntests\\test_cost_and_budget_controls.py .................                 [ 18%]\r\ntests\\test_end_to_end_replay.py ...                                      [ 19%]\r\ntests\\test_evaluation_learning_drift.py .....................            [ 29%]\r\ntests\\test_finding_policy_and_hitl.py ...................                [ 39%]\r\ntests\\test_github_review_output.py ...............                       [ 46%]\r\ntests\\test_live_pr_validation.py ...............                         [ 53%]\r\ntests\\test_network_adapters.py ......................................... [ 73%]\r\n...                                                                      [ 75%]\r\ntests\\test_retrieval_and_findings.py ..............                      [ 81%]\r\ntests\\test_review_orchestration.py ..............                        [ 88%]\r\ntests\\test_security_boundaries.py ..................                     [ 97%]\r\ntests\\test_webhook_intake.py .....                                       [100%]\r\n\r\n============================ 205 passed in 12.66s =============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "32f608021330954a3eeb9cc7207e2d90a18b66b0",
+    "dirty": true
+  },
+  "source_hash": "6d7302876e60dd393467ef87bd4bc6a059d9a130732fe275d5779fba4c8da513",
+  "before_hash": "6d7302876e60dd393467ef87bd4bc6a059d9a130732fe275d5779fba4c8da513",
+  "config_hash": "a74b6bd226f378ee52ad5fcd408db84a3797ace627e3cfe5f9a84b9f450dfb59",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "e2aa74fa3740db81fca4799c12778233a8bda44f9445bae5f5639b654d1dc27b"
+}

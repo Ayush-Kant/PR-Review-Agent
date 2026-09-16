@@ -17,6 +17,7 @@ import html
 import json
 import re
 import sqlite3
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping, Sequence
@@ -92,6 +93,7 @@ class RunProvenanceTrace:
     github_effects: list[dict[str, Any]] = field(default_factory=list)
     specialist_steps: list[dict[str, Any]] = field(default_factory=list)
     contains_secrets: bool = False
+    coverage_summary: dict[str, Any] | None = None
 
 
 class AuditSpine:
@@ -99,6 +101,7 @@ class AuditSpine:
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
+        self._lock = threading.Lock()
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -170,27 +173,28 @@ class AuditSpine:
         clean_details = redact_sensitive_data(dict(event.details))
         details_json = json.dumps(clean_details, sort_keys=True)
 
-        with self.connection:
-            cursor = self.connection.execute(
-                """
-                INSERT INTO audit_events (
-                    correlation_id, event_name, step, repository_id,
-                    pull_number, head_sha, run_id, timestamp, details_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    event.correlation_id,
-                    event.event_name,
-                    event.step,
-                    repository_id,
-                    pull_number,
-                    head_sha,
-                    run_id,
-                    event.timestamp,
-                    details_json,
-                ),
-            )
-            return int(cursor.lastrowid)
+        with self._lock:
+            with self.connection:
+                cursor = self.connection.execute(
+                    """
+                    INSERT INTO audit_events (
+                        correlation_id, event_name, step, repository_id,
+                        pull_number, head_sha, run_id, timestamp, details_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event.correlation_id,
+                        event.event_name,
+                        event.step,
+                        repository_id,
+                        pull_number,
+                        head_sha,
+                        run_id,
+                        event.timestamp,
+                        details_json,
+                    ),
+                )
+                return int(cursor.lastrowid)
 
     def record_events(
         self,
@@ -216,34 +220,35 @@ class AuditSpine:
 
     def get_events(self, correlation_id: str) -> list[AuditRecord]:
         """Query time-ordered audit events for a given correlation ID."""
-        cursor = self.connection.execute(
-            """
-            SELECT event_id, correlation_id, event_name, step,
-                   repository_id, pull_number, head_sha, run_id,
-                   timestamp, details_json
-            FROM audit_events
-            WHERE correlation_id = ?
-            ORDER BY timestamp ASC, event_id ASC
-            """,
-            (correlation_id,),
-        )
-        records: list[AuditRecord] = []
-        for row in cursor.fetchall():
-            records.append(
-                AuditRecord(
-                    event_id=row[0],
-                    correlation_id=row[1],
-                    event_name=row[2],
-                    step=row[3],
-                    repository_id=row[4],
-                    pull_number=row[5],
-                    head_sha=row[6],
-                    run_id=row[7],
-                    timestamp=row[8],
-                    details=json.loads(row[9]),
-                )
+        with self._lock:
+            cursor = self.connection.execute(
+                """
+                SELECT event_id, correlation_id, event_name, step,
+                       repository_id, pull_number, head_sha, run_id,
+                       timestamp, details_json
+                FROM audit_events
+                WHERE correlation_id = ?
+                ORDER BY timestamp ASC, event_id ASC
+                """,
+                (correlation_id,),
             )
-        return records
+            records: list[AuditRecord] = []
+            for row in cursor.fetchall():
+                records.append(
+                    AuditRecord(
+                        event_id=row[0],
+                        correlation_id=row[1],
+                        event_name=row[2],
+                        step=row[3],
+                        repository_id=row[4],
+                        pull_number=row[5],
+                        head_sha=row[6],
+                        run_id=row[7],
+                        timestamp=row[8],
+                        details=json.loads(row[9]),
+                    )
+                )
+            return records
 
     def reconstruct_run(self, correlation_id: str) -> RunProvenanceTrace:
         """Reconstruct full provenance trace across webhook, queue, truth, and GitHub effects (AC-11, NFR-06).
@@ -274,6 +279,10 @@ class AuditSpine:
                     trace.run_id = str(rec.details["run_id"])
                 if not extracted_job_id and rec.details.get("job_id"):
                     extracted_job_id = str(rec.details["job_id"])
+                if not trace.coverage_summary and rec.details.get("coverage_summary"):
+                    trace.coverage_summary = rec.details["coverage_summary"]
+                elif not trace.coverage_summary and rec.details.get("coverage"):
+                    trace.coverage_summary = rec.details["coverage"]
             if "specialist" in rec.event_name or "specialist" in rec.step:
                 trace.specialist_steps.append({
                     "step": rec.step,

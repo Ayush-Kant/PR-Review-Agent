@@ -28,6 +28,7 @@ from pr_review_agent.orchestration import (
     ReviewLifecycleState,
     ReviewOrchestrator,
     SpecialistHandler,
+    SpecialistStatus,
     SpecialistType,
 )
 from pr_review_agent.policy import (
@@ -225,10 +226,16 @@ class AutonomousReviewWorker:
                 )
                 return job, lifecycle_state
 
-            # Extract candidate findings from specialist outputs
+            # Extract candidate findings from specialist outputs (completed or degraded only)
             all_candidate_findings: list[CandidateFinding] = []
             for spec_output in lifecycle_state.specialist_outputs.values():
-                all_candidate_findings.extend(spec_output.findings)
+                if spec_output.status in (
+                    SpecialistStatus.COMPLETED.value,
+                    SpecialistStatus.DEGRADED.value,
+                    "completed",
+                    "degraded",
+                ):
+                    all_candidate_findings.extend(spec_output.findings)
 
             # Aggregate findings across specialists
             canonical_findings = self.aggregator.aggregate(
@@ -281,6 +288,21 @@ class AutonomousReviewWorker:
             # Mark job completed in queue
             self.queue.mark_completed(job.job_id, now=current_time)
 
+            coverage_data: dict[str, Any] = {}
+            if lifecycle_state.coverage_summary:
+                cov = lifecycle_state.coverage_summary
+                coverage_data = {
+                    "is_full_coverage": cov.is_full_coverage,
+                    "is_degraded": cov.is_degraded,
+                    "coverage_ratio": cov.coverage_ratio,
+                    "succeeded": [s.value if hasattr(s, "value") else str(s) for s in cov.succeeded_specialists],
+                    "degraded": [s.value if hasattr(s, "value") else str(s) for s in cov.degraded_specialists],
+                    "failed": [s.value if hasattr(s, "value") else str(s) for s in cov.failed_specialists],
+                    "timed_out": [s.value if hasattr(s, "value") else str(s) for s in cov.timed_out_specialists],
+                    "skipped": [s.value if hasattr(s, "value") else str(s) for s in cov.skipped_specialists],
+                    "failure_reasons": cov.failure_reasons,
+                }
+
             self.audit_spine.record_event(
                 AuditEvent(
                     correlation_id=correlation_id,
@@ -291,6 +313,8 @@ class AutonomousReviewWorker:
                         "job_id": job.job_id,
                         "canonical_findings_count": len(canonical_findings),
                         "published_count": published_count,
+                        "is_degraded": lifecycle_state.is_degraded,
+                        "coverage": coverage_data,
                     },
                 )
             )

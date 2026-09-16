@@ -12,8 +12,10 @@ from pr_review_agent.orchestration import (
     DurableJobQueue,
     JobState,
     ReviewOrchestrator,
+    SpecialistCoverageSummary,
     SpecialistInput,
     SpecialistOutput,
+    SpecialistStatus,
     SpecialistType,
 )
 
@@ -291,6 +293,146 @@ class ReviewOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         state = await self.orchestrator.execute_run(job, snapshot)
         self.assertEqual("completed", state.terminal_status)
         self.assertEqual("completed", state.specialist_outputs[SpecialistType.SECURITY].status)
+
+    async def test_specialist_contract_success_with_zero_findings(self) -> None:
+        """Test A: Specialist successfully executes and finds 0 issues -> status == completed, no degradation."""
+        snapshot = sample_snapshot()
+        job = self.queue.enqueue(snapshot, "delivery-zero-findings")
+
+        def zero_finding_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=inp.specialist_type,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.COMPLETED,
+                findings=(),
+            )
+
+        for spec in ALL_SPECIALISTS:
+            self.orchestrator.register_specialist(spec, zero_finding_handler)
+
+        state = await self.orchestrator.execute_run(job, snapshot)
+
+        self.assertEqual("completed", state.terminal_status)
+        self.assertFalse(state.is_degraded)
+        self.assertIsNotNone(state.coverage_summary)
+        self.assertTrue(state.coverage_summary.is_full_coverage)
+        self.assertFalse(state.coverage_summary.is_degraded)
+        self.assertEqual(1.0, state.coverage_summary.coverage_ratio)
+        self.assertEqual(4, len(state.coverage_summary.succeeded_specialists))
+        self.assertEqual(0, len(state.coverage_summary.failed_specialists))
+        self.assertEqual(0, len(state.partial_failures))
+
+    async def test_specialist_contract_mixed_coverage_degradation(self) -> None:
+        """Test H: SECURITY/QUALITY succeed, TESTS/DOCUMENTATION fail -> coverage 2/4, is_degraded=True, event emitted."""
+        snapshot = sample_snapshot()
+        job = self.queue.enqueue(snapshot, "delivery-mixed-cov")
+
+        def sec_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=SpecialistType.SECURITY,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.COMPLETED,
+                findings=(),
+            )
+
+        def qual_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=SpecialistType.QUALITY,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.COMPLETED,
+                findings=(),
+            )
+
+        def tests_fail_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=SpecialistType.TESTS,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.FAILED,
+                findings=(),
+                error_message="Rate limit 429",
+            )
+
+        def doc_fail_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=SpecialistType.DOCUMENTATION,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.FAILED,
+                findings=(),
+                error_message="Rate limit 429",
+            )
+
+        self.orchestrator.register_specialist(SpecialistType.SECURITY, sec_handler)
+        self.orchestrator.register_specialist(SpecialistType.QUALITY, qual_handler)
+        self.orchestrator.register_specialist(SpecialistType.TESTS, tests_fail_handler)
+        self.orchestrator.register_specialist(SpecialistType.DOCUMENTATION, doc_fail_handler)
+
+        state = await self.orchestrator.execute_run(job, snapshot)
+
+        self.assertEqual("completed", state.terminal_status)
+        self.assertTrue(state.is_degraded)
+        self.assertIsNotNone(state.coverage_summary)
+        self.assertFalse(state.coverage_summary.is_full_coverage)
+        self.assertTrue(state.coverage_summary.is_degraded)
+        self.assertEqual(0.5, state.coverage_summary.coverage_ratio)
+        self.assertEqual(("security", "quality"), state.coverage_summary.succeeded_specialists)
+        self.assertEqual(("tests", "documentation"), state.coverage_summary.failed_specialists)
+
+        # Confirm specialist_coverage_degraded audit event was emitted
+        degraded_events = [e for e in state.audit_trail if e.event_name == "specialist_coverage_degraded"]
+        self.assertGreaterEqual(len(degraded_events), 1)
+        deg_evt = degraded_events[0]
+        self.assertEqual(0.5, deg_evt.details["coverage_ratio"])
+        self.assertIn("tests", deg_evt.details["failed"])
+        self.assertIn("documentation", deg_evt.details["failed"])
+
+    async def test_distinguish_successful_zero_from_failed_empty(self) -> None:
+        """Test I: A successful specialist returning zero findings is strictly distinct from a failed specialist with []."""
+        snapshot = sample_snapshot()
+        job = self.queue.enqueue(snapshot, "delivery-distinguish")
+
+        # Tests specialist succeeds with valid empty output
+        def tests_success_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=SpecialistType.TESTS,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.COMPLETED,
+                findings=(),
+            )
+
+        # Documentation specialist fails after error, returning empty output
+        def doc_failed_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=SpecialistType.DOCUMENTATION,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.FAILED,
+                findings=(),
+                error_message="Provider timeout",
+            )
+
+        def pass_handler(inp: SpecialistInput) -> SpecialistOutput:
+            return SpecialistOutput(
+                specialist_type=inp.specialist_type,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.COMPLETED,
+                findings=(),
+            )
+
+        self.orchestrator.register_specialist(SpecialistType.SECURITY, pass_handler)
+        self.orchestrator.register_specialist(SpecialistType.QUALITY, pass_handler)
+        self.orchestrator.register_specialist(SpecialistType.TESTS, tests_success_handler)
+        self.orchestrator.register_specialist(SpecialistType.DOCUMENTATION, doc_failed_handler)
+
+        state = await self.orchestrator.execute_run(job, snapshot)
+
+        # TESTS must be in succeeded_specialists; DOCUMENTATION must be in failed_specialists
+        cov = state.coverage_summary
+        self.assertIn("tests", cov.succeeded_specialists)
+        self.assertNotIn("tests", cov.failed_specialists)
+        self.assertIn("documentation", cov.failed_specialists)
+        self.assertNotIn("documentation", cov.succeeded_specialists)
+        # Because one failed, coverage is degraded, proving the failure wasn't treated as successful zero
+        self.assertTrue(state.is_degraded)
+        self.assertEqual(0.75, cov.coverage_ratio)
 
 
 if __name__ == "__main__":

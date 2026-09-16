@@ -37,12 +37,13 @@ from pr_review_agent.github_output import (
 )
 import asyncio
 from pr_review_agent.intake import ReviewSnapshot, WebhookIntake
-from pr_review_agent.observability import AuditSpine
+from pr_review_agent.observability import AuditEvent, AuditSpine
 from pr_review_agent.orchestration import (
     DurableJobQueue,
     ReviewOrchestrator,
     SpecialistInput,
     SpecialistOutput,
+    SpecialistStatus,
     SpecialistType,
 )
 from pr_review_agent.policy import (
@@ -1400,6 +1401,607 @@ class TestE2EAdaptersIntegration(unittest.TestCase):
         self.assertEqual(count, 4)  # Exactly 4 writes, zero duplicate writes
 
         llm_adapter.close()
+
+
+class TestSpecialistReliabilityAndRetryHardening(unittest.TestCase):
+    """Deterministic tests for specialist execution, retry hardening, and coverage degradation."""
+
+    def setUp(self) -> None:
+        self.secret_registry = RuntimeSecretRegistry()
+        self.env = {
+            "OPENAI_API_KEY": "sk-mock-key-12345",
+            "GROQ_API_KEY": "gsk-mock-key-12345",
+        }
+        self.sec_config = SecurityConfig(
+            authorized_tenant="acme-corp",
+            authorized_repositories=["acme-corp/test-repo"],
+            secret_registry=self.secret_registry,
+            env_provider=self.env.get,
+        )
+        self.conn = sqlite3.connect(":memory:", check_same_thread=False)
+        self.audit_spine = AuditSpine(self.conn)
+
+    def tearDown(self) -> None:
+        self.conn.close()
+
+    def test_http_429_retry_then_success(self) -> None:
+        """Test B: First attempt returns 429, retry succeeds -> status completed, specialist_retry event emitted."""
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return httpx.Response(429, json={"error": {"message": "Rate limit reached"}}, headers={"Retry-After": "0.01"})
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": json.dumps({"findings": []})}}],
+                    "usage": {"prompt_tokens": 50, "completion_tokens": 10, "total_tokens": 60},
+                },
+            )
+
+        sleep_calls: list[float] = []
+        adapter = LLMSpecialistAdapter(
+            provider="groq",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(handler),
+            audit_spine=self.audit_spine,
+            sleeper=lambda s: sleep_calls.append(s),
+            retry_backoff_seconds=0.01,
+            max_retries=2,
+        )
+
+        inp = SpecialistInput(
+            specialist_type=SpecialistType.TESTS,
+            correlation_id="corr-429-success",
+            instructions="Review tests",
+            changed_files=("test_foo.py",),
+            diff_content="+def test_bar(): pass",
+            retrieved_evidence=(),
+            head_sha="sha429",
+        )
+
+        out = adapter(inp)
+        self.assertEqual(out.status, SpecialistStatus.COMPLETED)
+        self.assertEqual(call_count, 2)
+        self.assertEqual(len(sleep_calls), 1)
+
+        # Confirm specialist_retry audit event was emitted
+        events = self.audit_spine.get_events("corr-429-success")
+        retry_events = [e for e in events if e.event_name == "specialist_retry"]
+        self.assertEqual(len(retry_events), 1)
+        self.assertEqual(retry_events[0].details["attempt"], 1)
+        self.assertEqual(retry_events[0].details["status_code"], 429)
+
+    def test_http_429_retry_exhaustion_explicit_failure(self) -> None:
+        """Test C: All attempts return 429 -> status failed, never silent empty success."""
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(429, json={"error": {"message": "Rate limit exceeded"}})
+
+        sleep_calls: list[float] = []
+        adapter = LLMSpecialistAdapter(
+            provider="groq",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(handler),
+            audit_spine=self.audit_spine,
+            sleeper=lambda s: sleep_calls.append(s),
+            retry_backoff_seconds=0.01,
+            max_retries=2,
+        )
+
+        inp = SpecialistInput(
+            specialist_type=SpecialistType.DOCUMENTATION,
+            correlation_id="corr-429-exhaust",
+            instructions="Review docs",
+            changed_files=("README.md",),
+            diff_content="+docs",
+            retrieved_evidence=(),
+            head_sha="sha429ex",
+        )
+
+        out = adapter(inp)
+        self.assertEqual(out.status, SpecialistStatus.FAILED)
+        self.assertNotEqual(out.status, SpecialistStatus.COMPLETED)
+        self.assertEqual(out.findings, ())
+        self.assertIn("rate limit", (out.error_message or "").lower())
+        self.assertEqual(call_count, 3)  # initial attempt + 2 retries
+
+        # Confirm specialist_failed event emitted
+        events = self.audit_spine.get_events("corr-429-exhaust")
+        failed_events = [e for e in events if e.event_name == "specialist_failed"]
+        self.assertEqual(len(failed_events), 1)
+
+    def test_retry_after_header_handling_and_bounded_max(self) -> None:
+        """Test D: Respects Retry-After header and clamps to configured max delay."""
+        adapter = LLMSpecialistAdapter(
+            provider="groq",
+            security_config=self.sec_config,
+            max_retry_backoff_seconds=5.0,
+        )
+
+        # 1. Normal Retry-After within bound
+        resp1 = httpx.Response(429, headers={"Retry-After": "3"})
+        delay1 = adapter._compute_backoff(attempt=0, resp=resp1)
+        self.assertEqual(delay1, 3.0)
+
+        # 2. Retry-After exceeding max bound
+        resp2 = httpx.Response(429, headers={"Retry-After": "60"})
+        delay2 = adapter._compute_backoff(attempt=0, resp=resp2)
+        self.assertEqual(delay2, 5.0)  # Clamped to 5.0
+
+        # 3. No Retry-After -> exponential backoff clamped to max bound
+        adapter_large_attempt = LLMSpecialistAdapter(
+            provider="groq",
+            security_config=self.sec_config,
+            retry_backoff_seconds=1.0,
+            max_retry_backoff_seconds=5.0,
+        )
+        delay3 = adapter_large_attempt._compute_backoff(attempt=5, resp=None)
+        # 1.0 * 2^5 = 32.0 -> clamped to 5.0
+        self.assertEqual(delay3, 5.0)
+
+    def test_malformed_json_recovery_or_explicit_failure(self) -> None:
+        """Test E: Malformed output is retried; if unrecoverable, fails explicitly with no silent []."""
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return httpx.Response(200, json={"choices": [{"message": {"content": "not valid json at all {"}}]})
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": json.dumps({"findings": []})}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+                },
+            )
+
+        adapter = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(handler),
+            audit_spine=self.audit_spine,
+            sleeper=lambda s: None,
+            max_retries=2,
+        )
+
+        inp = SpecialistInput(
+            specialist_type=SpecialistType.QUALITY,
+            correlation_id="corr-malformed-recover",
+            instructions="Check quality",
+            changed_files=("app.py",),
+            diff_content="+x = 1",
+            retrieved_evidence=(),
+            head_sha="shamal",
+        )
+
+        out = adapter(inp)
+        self.assertEqual(out.status, SpecialistStatus.COMPLETED)
+        self.assertEqual(call_count, 2)
+
+        # Now test unrecoverable malformed JSON
+        def all_malformed_handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"choices": [{"message": {"content": "broken json"}}]})
+
+        adapter_broken = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(all_malformed_handler),
+            audit_spine=self.audit_spine,
+            sleeper=lambda s: None,
+            max_retries=1,
+        )
+        out_broken = adapter_broken(inp)
+        self.assertEqual(out_broken.status, SpecialistStatus.FAILED)
+        self.assertIn("malformed", (out_broken.error_message or "").lower())
+
+    def test_markdown_fenced_json_parsing(self) -> None:
+        """Test F: Markdown code-fenced JSON is normalized and parsed successfully."""
+        fenced_payload = (
+            "```json\n"
+            "{\n"
+            '  "findings": [\n'
+            "    {\n"
+            '      "category": "maintainability",\n'
+            '      "severity": "low",\n'
+            '      "confidence": 0.85,\n'
+            '      "summary": "Fenced finding parsed",\n'
+            '      "rationale": "Valid inside markdown code block"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "```"
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": fenced_payload}}],
+                    "usage": {"prompt_tokens": 40, "completion_tokens": 20, "total_tokens": 60},
+                },
+            )
+
+        adapter = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(handler),
+        )
+
+        inp = SpecialistInput(
+            specialist_type=SpecialistType.QUALITY,
+            correlation_id="corr-fenced",
+            instructions="Check quality",
+            changed_files=("util.py",),
+            diff_content="+y = 2",
+            retrieved_evidence=(),
+            head_sha="shafence",
+        )
+
+        out = adapter(inp)
+        self.assertEqual(out.status, SpecialistStatus.COMPLETED)
+        self.assertEqual(len(out.findings), 1)
+        self.assertEqual(out.findings[0].summary, "Fenced finding parsed")
+
+    def test_commentary_around_json_and_fences_parsing(self) -> None:
+        """Verify trailing markdown and extra commentary around JSON block is cleanly extracted."""
+        # Case A: Leading and trailing text outside ```json ... ``` fences
+        payload_with_fences_and_commentary = (
+            "Here is the review result from the specialist analysis:\n\n"
+            "```json\n"
+            "{\n"
+            '  "findings": [\n'
+            "    {\n"
+            '      "category": "tests",\n'
+            '      "severity": "medium",\n'
+            '      "confidence": 0.9,\n'
+            '      "summary": "Missing boundary test",\n'
+            '      "rationale": "Edge case at zero not tested"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "```\n\n"
+            "Please review the suggestions above. Let me know if you have questions!"
+        )
+
+        def handler_a(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": payload_with_fences_and_commentary}}],
+                    "usage": {"prompt_tokens": 50, "completion_tokens": 30, "total_tokens": 80},
+                },
+            )
+
+        adapter_a = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(handler_a),
+        )
+        inp_a = SpecialistInput(
+            specialist_type=SpecialistType.TESTS,
+            correlation_id="corr-comm-fence",
+            instructions="Review tests",
+            changed_files=("test_b.py",),
+            diff_content="+def test_zero(): pass",
+            retrieved_evidence=(),
+            head_sha="shacomm1",
+        )
+        out_a = adapter_a(inp_a)
+        self.assertEqual(out_a.status, SpecialistStatus.COMPLETED)
+        self.assertEqual(len(out_a.findings), 1)
+        self.assertEqual(out_a.findings[0].summary, "Missing boundary test")
+
+        # Case B: Plain JSON surrounded by commentary (no fences)
+        payload_with_plain_commentary = (
+            "Review analysis completed successfully.\n"
+            "{\n"
+            '  "findings": [\n'
+            "    {\n"
+            '      "category": "documentation",\n'
+            '      "severity": "low",\n'
+            '      "confidence": 0.8,\n'
+            '      "summary": "Missing docstring for helper",\n'
+            '      "rationale": "Public function lacks docstring"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "End of review output."
+        )
+
+        def handler_b(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": payload_with_plain_commentary}}],
+                    "usage": {"prompt_tokens": 50, "completion_tokens": 30, "total_tokens": 80},
+                },
+            )
+
+        adapter_b = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(handler_b),
+        )
+        inp_b = SpecialistInput(
+            specialist_type=SpecialistType.DOCUMENTATION,
+            correlation_id="corr-comm-plain",
+            instructions="Review docs",
+            changed_files=("doc.py",),
+            diff_content="+def helper(): pass",
+            retrieved_evidence=(),
+            head_sha="shacomm2",
+        )
+        out_b = adapter_b(inp_b)
+        self.assertEqual(out_b.status, SpecialistStatus.COMPLETED)
+        self.assertEqual(len(out_b.findings), 1)
+        self.assertEqual(out_b.findings[0].summary, "Missing docstring for helper")
+
+    def test_schema_violations_fail_explicitly_without_silent_empty_findings(self) -> None:
+        """Schema violations trigger retry and exhaust to SpecialistStatus.FAILED, never silent zero findings."""
+        # Scenario 1: 'findings' is not a list
+        def bad_top_level_handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({"findings": "not a list"})}}]})
+
+        adapter1 = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(bad_top_level_handler),
+            audit_spine=self.audit_spine,
+            sleeper=lambda s: None,
+            max_retries=1,
+        )
+        inp1 = SpecialistInput(
+            specialist_type=SpecialistType.QUALITY,
+            correlation_id="corr-schema-1",
+            instructions="Check quality",
+            changed_files=("a.py",),
+            diff_content="+a = 1",
+            retrieved_evidence=(),
+            head_sha="shaschema1",
+        )
+        out1 = adapter1(inp1)
+        self.assertEqual(out1.status, SpecialistStatus.FAILED)
+        self.assertEqual(out1.findings, ())
+        self.assertIn("findings", (out1.error_message or "").lower())
+
+        # Scenario 2: finding item missing required summary/rationale
+        def bad_item_handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({"findings": [{"category": "bug"}]})}}]})
+
+        adapter2 = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(bad_item_handler),
+            audit_spine=self.audit_spine,
+            sleeper=lambda s: None,
+            max_retries=1,
+        )
+        inp2 = SpecialistInput(
+            specialist_type=SpecialistType.QUALITY,
+            correlation_id="corr-schema-2",
+            instructions="Check quality",
+            changed_files=("a.py",),
+            diff_content="+a = 1",
+            retrieved_evidence=(),
+            head_sha="shaschema2",
+        )
+        out2 = adapter2(inp2)
+        self.assertEqual(out2.status, SpecialistStatus.FAILED)
+        self.assertEqual(out2.findings, ())
+        self.assertIn("summary", (out2.error_message or "").lower())
+
+    def test_timeout_handling_explicit_state(self) -> None:
+        """Test G: Client/deadline timeout results in explicit TIMEOUT state and event."""
+        def timeout_handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ReadTimeout("Socket read timed out")
+
+        adapter = LLMSpecialistAdapter(
+            provider="groq",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(timeout_handler),
+            audit_spine=self.audit_spine,
+            sleeper=lambda s: None,
+            max_retries=1,
+        )
+
+        inp = SpecialistInput(
+            specialist_type=SpecialistType.TESTS,
+            correlation_id="corr-timeout",
+            instructions="Run tests",
+            changed_files=("test.py",),
+            diff_content="+test",
+            retrieved_evidence=(),
+            head_sha="shatimeout",
+        )
+
+        out = adapter(inp)
+        self.assertEqual(out.status, SpecialistStatus.TIMEOUT)
+        self.assertIn("timed out", (out.error_message or "").lower())
+
+        events = self.audit_spine.get_events("corr-timeout")
+        timeout_events = [e for e in events if e.event_name == "specialist_timeout"]
+        self.assertEqual(len(timeout_events), 1)
+
+    def test_cost_ledger_exact_once_on_retry_and_failure(self) -> None:
+        """Test L: Exact-once CostLedger accounting: retries and failures do not double count or fabricate usage."""
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return httpx.Response(429, json={"error": {"message": "Rate limited"}})
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": json.dumps({"findings": []})}}],
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+                },
+            )
+
+        pricing = ProviderPricingRegistry()
+        adapter = LLMSpecialistAdapter(
+            provider="openai",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(handler),
+            pricing_registry=pricing,
+            sleeper=lambda s: None,
+            retry_backoff_seconds=0.01,
+            max_retries=2,
+        )
+
+        cost_ledger = CostLedger(self.conn)
+        queue = DurableJobQueue(self.conn)
+        orchestrator = ReviewOrchestrator(
+            specialist_handlers={
+                SpecialistType.SECURITY: adapter,
+                SpecialistType.QUALITY: adapter,
+                SpecialistType.TESTS: adapter,
+                SpecialistType.DOCUMENTATION: adapter,
+            },
+            cost_ledger=cost_ledger,
+            pricing_registry=pricing,
+        )
+
+        snapshot = ReviewSnapshot(
+            repository_id="acme-corp/test-repo",
+            repository_full_name="acme-corp/test-repo",
+            pull_request_number=200,
+            base_sha="base0",
+            head_sha="headcost",
+            changed_files=("a.py",),
+            policy_version="v1",
+            prompt_version="v1",
+            retrieval_index_version="v1",
+            model_configuration={"provider": "openai", "model": "gpt-4o"},
+        )
+        job = queue.enqueue(snapshot, delivery_id="deliv-cost-exact")
+
+        state = asyncio.run(orchestrator.execute_run(job, snapshot))
+
+        # Each specialist retried once, but only the 1 successful response reported usage (120 tokens)
+        summary = cost_ledger.get_run_cost_summary(state.run_id)
+        self.assertEqual(summary.total_tokens, 480)  # 4 * 120
+        self.assertEqual(len(summary.components), 4)
+
+        # Database rows in component_usage_records must be exactly 4 (1 per specialist, zero duplicates from retries)
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM component_usage_records WHERE run_id = ?", (state.run_id,))
+        count = cursor.fetchone()[0]
+        self.assertEqual(count, 4)
+
+    def test_pr2_realistic_failure_reproduction_and_degradation_detection(self) -> None:
+        """Test N: Realistic PR #2 reproduction: SECURITY/QUALITY succeed, TESTS/DOCUMENTATION return 429.
+        Verify no false '0 findings, completed' semantics, is_degraded=True, coverage_ratio=0.5."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content.decode("utf-8"))
+            prompt_text = " ".join(m.get("content", "") for m in body.get("messages", []))
+
+            if "SECURITY" in prompt_text:
+                return httpx.Response(
+                    200,
+                    json={
+                        "choices": [{"message": {"content": json.dumps({"findings": [{
+                            "category": "security_vulnerability",
+                            "severity": "medium",
+                            "confidence": 0.88,
+                            "summary": "Insecure session token",
+                            "rationale": "Missing entropy",
+                        }]})}}],
+                        "usage": {"prompt_tokens": 100, "completion_tokens": 30, "total_tokens": 130},
+                    },
+                )
+            elif "QUALITY" in prompt_text:
+                return httpx.Response(
+                    200,
+                    json={
+                        "choices": [{"message": {"content": json.dumps({"findings": [{
+                            "category": "maintainability",
+                            "severity": "low",
+                            "confidence": 0.85,
+                            "summary": "Magic number",
+                            "rationale": "Use named constant",
+                        }]})}}],
+                        "usage": {"prompt_tokens": 100, "completion_tokens": 30, "total_tokens": 130},
+                    },
+                )
+            else:
+                # TESTS and DOCUMENTATION fail with 429 rate limit
+                return httpx.Response(429, json={"error": {"message": "Rate limit reached for model openai/gpt-oss-120b"}})
+
+        adapter = LLMSpecialistAdapter(
+            provider="groq",
+            security_config=self.sec_config,
+            transport=httpx.MockTransport(handler),
+            audit_spine=self.audit_spine,
+            sleeper=lambda s: None,
+            retry_backoff_seconds=0.01,
+            max_retries=1,
+        )
+
+        handlers = {
+            SpecialistType.SECURITY: adapter,
+            SpecialistType.QUALITY: adapter,
+            SpecialistType.TESTS: adapter,
+            SpecialistType.DOCUMENTATION: adapter,
+        }
+
+        queue = DurableJobQueue(self.conn)
+        orchestrator = ReviewOrchestrator(specialist_handlers=handlers)
+
+        snapshot = ReviewSnapshot(
+            repository_id="acme-corp/test-repo",
+            repository_full_name="acme-corp/test-repo",
+            pull_request_number=2,
+            base_sha="base32f",
+            head_sha="0472062902e4cccee57e723131b1b11c11da93d6",
+            changed_files=("validation_fixture.py",),
+            policy_version="v1",
+            prompt_version="v1",
+            retrieval_index_version="v1",
+            model_configuration={"provider": "groq", "model": "openai/gpt-oss-120b"},
+        )
+        job = queue.enqueue(snapshot, delivery_id="deliv-pr2-repro")
+
+        state = asyncio.run(orchestrator.execute_run(job, snapshot, diff_content="+fixture code"))
+
+        # Must NOT falsely claim full completed review with 0 findings for failed specialists
+        self.assertEqual(state.terminal_status, "completed")  # Partial run completed
+        self.assertTrue(state.is_degraded)
+        self.assertIsNotNone(state.coverage_summary)
+        self.assertFalse(state.coverage_summary.is_full_coverage)
+        self.assertEqual(state.coverage_summary.coverage_ratio, 0.5)
+        self.assertEqual(state.coverage_summary.succeeded_specialists, ("security", "quality"))
+        self.assertEqual(state.coverage_summary.failed_specialists, ("tests", "documentation"))
+
+        # Verify findings only come from succeeded specialists (2 findings total)
+        all_candidate_findings = []
+        for out in state.specialist_outputs.values():
+            if out.status in (SpecialistStatus.COMPLETED.value, "completed"):
+                all_candidate_findings.extend(out.findings)
+        self.assertEqual(len(all_candidate_findings), 2)
+        # TESTS and DOCUMENTATION must have status == "failed"
+        self.assertEqual(state.specialist_outputs[SpecialistType.TESTS].status, SpecialistStatus.FAILED)
+        self.assertEqual(state.specialist_outputs[SpecialistType.DOCUMENTATION].status, SpecialistStatus.FAILED)
+
+        # Record orchestrator audit trail into audit spine and verify specialist_coverage_degraded
+        for ev in state.audit_trail:
+            self.audit_spine.record_event(ev)
+        degraded_events = [e for e in state.audit_trail if e.event_name == "specialist_coverage_degraded"]
+        self.assertEqual(len(degraded_events), 1)
+        self.assertIn("tests", degraded_events[0].details["failed"])
+        self.assertIn("documentation", degraded_events[0].details["failed"])
+
+        # Also verify queryable from audit spine via composite correlation_id
+        spine_events = self.audit_spine.get_events(f"deliv-pr2-repro:{state.run_id}")
+        self.assertTrue(any(e.event_name == "specialist_coverage_degraded" for e in spine_events))
 
 
 if __name__ == "__main__":

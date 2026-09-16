@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
-from typing import Any
+from typing import Any, Callable
 import httpx
 
 from pr_review_agent.cost_controls import ComponentUsage, ProviderPricingRegistry, UsageSource
@@ -15,6 +16,7 @@ from pr_review_agent.orchestration import (
     SpecialistHandler,
     SpecialistInput,
     SpecialistOutput,
+    SpecialistStatus,
     SpecialistType,
 )
 from pr_review_agent.security import (
@@ -65,10 +67,12 @@ class LLMSpecialistAdapter:
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
         retry_backoff_seconds: float = 0.05,
+        max_retry_backoff_seconds: float = 10.0,
         pricing_registry: ProviderPricingRegistry | None = None,
         secret_scanner: SecretLeakageScanner | None = None,
         audit_spine: AuditSpine | None = None,
         env_var_name: str | None = None,
+        sleeper: Callable[[float], None] | None = None,
     ) -> None:
         clean_provider = provider.strip().lower()
         if clean_provider not in SUPPORTED_PROVIDERS:
@@ -83,6 +87,8 @@ class LLMSpecialistAdapter:
         self.timeout_seconds = timeout_seconds
         self.max_retries = max(0, max_retries)
         self.retry_backoff_seconds = max(0.0, retry_backoff_seconds)
+        self.max_retry_backoff_seconds = max(self.retry_backoff_seconds, max_retry_backoff_seconds)
+        self._sleeper = sleeper or time.sleep
         self.pricing_registry = pricing_registry or ProviderPricingRegistry()
         self.secret_scanner = secret_scanner or SecretLeakageScanner(security_config.secret_registry)
         self.audit_spine = audit_spine
@@ -113,6 +119,19 @@ class LLMSpecialistAdapter:
                 "User-Agent": f"PR-Review-Agent-LLM/{self.provider}",
             },
         )
+
+    def _compute_backoff(self, attempt: int, resp: httpx.Response | None = None) -> float:
+        """Compute bounded backoff delay, respecting Retry-After on HTTP 429 when available."""
+        if resp is not None and resp.status_code == 429:
+            retry_after_hdr = resp.headers.get("Retry-After")
+            if retry_after_hdr:
+                try:
+                    delay = float(retry_after_hdr.strip())
+                    return max(0.0, min(self.max_retry_backoff_seconds, delay))
+                except (ValueError, TypeError):
+                    pass
+        delay = self.retry_backoff_seconds * (2 ** attempt)
+        return max(0.0, min(self.max_retry_backoff_seconds, delay))
 
     def _sanitize_error(self, message: str) -> str:
         """Sanitize error message to ensure no secrets or sensitive payload text leak."""
@@ -181,6 +200,38 @@ class LLMSpecialistAdapter:
             "response_format": {"type": "json_object"},
         }
 
+    @staticmethod
+    def _extract_json_text(raw_text: str) -> str:
+        """Extract valid JSON substring from potentially markdown-wrapped or commentary-laden output."""
+        cleaned = (raw_text or "").strip()
+        if not cleaned:
+            return ""
+
+        # 1. Direct JSON object
+        if cleaned.startswith("{") and cleaned.endswith("}"):
+            return cleaned
+
+        # 2. Extract from markdown code fences if present
+        if "```" in cleaned:
+            fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, re.IGNORECASE)
+            if fence_match:
+                candidate = fence_match.group(1).strip()
+                if candidate.startswith("{") and candidate.endswith("}"):
+                    return candidate
+                first_b = candidate.find("{")
+                last_b = candidate.rfind("}")
+                if first_b != -1 and last_b != -1 and last_b > first_b:
+                    return candidate[first_b : last_b + 1]
+                return candidate
+
+        # 3. Extract outermost object braces { ... } from surrounding commentary
+        first_b = cleaned.find("{")
+        last_b = cleaned.rfind("}")
+        if first_b != -1 and last_b != -1 and last_b > first_b:
+            return cleaned[first_b : last_b + 1]
+
+        return cleaned
+
     def _parse_findings(
         self,
         raw_text: str,
@@ -191,8 +242,10 @@ class LLMSpecialistAdapter:
         Enforces secret scanning across ALL externally generated fields:
         category, summary, rationale, file_path, remediation, evidence_refs.
         """
+        cleaned_text = self._extract_json_text(raw_text)
+
         try:
-            data = json.loads(raw_text)
+            data = json.loads(cleaned_text)
         except (json.JSONDecodeError, UnicodeDecodeError) as err:
             raise ValueError(f"Malformed JSON from model: {err}") from err
 
@@ -202,12 +255,12 @@ class LLMSpecialistAdapter:
         parsed: list[CandidateFinding] = []
         for idx, item in enumerate(data["findings"]):
             if not isinstance(item, dict):
-                continue
+                raise ValueError(f"Finding item {idx} in 'findings' array is not an object")
 
             summary = str(item.get("summary", "")).strip()
             rationale = str(item.get("rationale", "")).strip()
             if not summary or not rationale:
-                continue
+                raise ValueError(f"Finding item {idx} in 'findings' array missing required 'summary' or 'rationale'")
 
             category = str(item.get("category", spec_input.specialist_type.value))
             file_path = item.get("file_path")
@@ -279,6 +332,21 @@ class LLMSpecialistAdapter:
         endpoint = f"{self.base_url}/chat/completions"
         payload = self._build_payload(spec_input)
 
+        if self.audit_spine is not None:
+            self.audit_spine.record_event(
+                AuditEvent(
+                    correlation_id=spec_input.correlation_id,
+                    event_name="specialist_started",
+                    step=f"specialist_{spec_input.specialist_type.value}",
+                    timestamp=time.time(),
+                    details={
+                        "specialist_type": spec_input.specialist_type.value,
+                        "provider": self.provider,
+                        "model": self.model,
+                    },
+                )
+            )
+
         # Pre-scan diff for prompt injection indicators
         if spec_input.diff_content:
             inj_result = self.injection_detector.scan(spec_input.diff_content, source="diff_content")
@@ -299,7 +367,7 @@ class LLMSpecialistAdapter:
                 )
 
         last_error_message: str | None = None
-        last_status = "failed"
+        last_status = SpecialistStatus.FAILED
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -311,15 +379,52 @@ class LLMSpecialistAdapter:
                     last_error_message = self._sanitize_error(
                         f"Provider {self.provider} error {resp.status_code}: {safe_err_text}"
                     )
-                    last_status = "failed"
+                    last_status = SpecialistStatus.FAILED
                     # Only retry on transient rate-limit or 5xx server errors
                     if resp.status_code in (429, 500, 502, 503, 504) and attempt < self.max_retries:
-                        time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                        backoff = self._compute_backoff(attempt, resp)
+                        if self.audit_spine is not None:
+                            self.audit_spine.record_event(
+                                AuditEvent(
+                                    correlation_id=spec_input.correlation_id,
+                                    event_name="specialist_retry",
+                                    step=f"specialist_{spec_input.specialist_type.value}",
+                                    timestamp=time.time(),
+                                    details={
+                                        "attempt": attempt + 1,
+                                        "max_retries": self.max_retries,
+                                        "provider": self.provider,
+                                        "model": self.model,
+                                        "status_code": resp.status_code,
+                                        "error": last_error_message,
+                                        "backoff_seconds": backoff,
+                                    },
+                                )
+                            )
+                        self._sleeper(backoff)
                         continue
+
+                    if self.audit_spine is not None:
+                        self.audit_spine.record_event(
+                            AuditEvent(
+                                correlation_id=spec_input.correlation_id,
+                                event_name="specialist_failed",
+                                step=f"specialist_{spec_input.specialist_type.value}",
+                                timestamp=time.time(),
+                                details={
+                                    "specialist_type": spec_input.specialist_type.value,
+                                    "provider": self.provider,
+                                    "model": self.model,
+                                    "status_code": resp.status_code,
+                                    "error": last_error_message,
+                                    "duration": duration,
+                                },
+                            )
+                        )
                     return SpecialistOutput(
                         specialist_type=spec_input.specialist_type,
                         correlation_id=spec_input.correlation_id,
-                        status="failed",
+                        status=SpecialistStatus.FAILED,
                         error_message=last_error_message,
                         execution_duration=duration,
                     )
@@ -327,11 +432,51 @@ class LLMSpecialistAdapter:
                 resp_data = resp.json()
                 choices = resp_data.get("choices", [])
                 if not choices or not isinstance(choices, list):
+                    last_error_message = f"Provider {self.provider} returned no choices"
+                    last_status = SpecialistStatus.FAILED
+                    if attempt < self.max_retries:
+                        backoff = self._compute_backoff(attempt)
+                        if self.audit_spine is not None:
+                            self.audit_spine.record_event(
+                                AuditEvent(
+                                    correlation_id=spec_input.correlation_id,
+                                    event_name="specialist_retry",
+                                    step=f"specialist_{spec_input.specialist_type.value}",
+                                    timestamp=time.time(),
+                                    details={
+                                        "attempt": attempt + 1,
+                                        "max_retries": self.max_retries,
+                                        "provider": self.provider,
+                                        "model": self.model,
+                                        "error": last_error_message,
+                                        "backoff_seconds": backoff,
+                                    },
+                                )
+                            )
+                        self._sleeper(backoff)
+                        continue
+
+                    if self.audit_spine is not None:
+                        self.audit_spine.record_event(
+                            AuditEvent(
+                                correlation_id=spec_input.correlation_id,
+                                event_name="specialist_failed",
+                                step=f"specialist_{spec_input.specialist_type.value}",
+                                timestamp=time.time(),
+                                details={
+                                    "specialist_type": spec_input.specialist_type.value,
+                                    "provider": self.provider,
+                                    "model": self.model,
+                                    "error": last_error_message,
+                                    "duration": duration,
+                                },
+                            )
+                        )
                     return SpecialistOutput(
                         specialist_type=spec_input.specialist_type,
                         correlation_id=spec_input.correlation_id,
-                        status="failed",
-                        error_message=f"Provider {self.provider} returned no choices",
+                        status=SpecialistStatus.FAILED,
+                        error_message=last_error_message,
                         execution_duration=duration,
                     )
 
@@ -365,11 +510,83 @@ class LLMSpecialistAdapter:
                     pricing_configured=pricing_configured,
                 )
 
-                findings = self._parse_findings(raw_content, spec_input)
+                try:
+                    findings = self._parse_findings(raw_content, spec_input)
+                except ValueError as parse_err:
+                    safe_err_text = self._sanitize_error(str(parse_err))
+                    last_error_message = safe_err_text
+                    last_status = SpecialistStatus.FAILED
+                    if attempt < self.max_retries:
+                        backoff = self._compute_backoff(attempt)
+                        if self.audit_spine is not None:
+                            self.audit_spine.record_event(
+                                AuditEvent(
+                                    correlation_id=spec_input.correlation_id,
+                                    event_name="specialist_retry",
+                                    step=f"specialist_{spec_input.specialist_type.value}",
+                                    timestamp=time.time(),
+                                    details={
+                                        "attempt": attempt + 1,
+                                        "max_retries": self.max_retries,
+                                        "provider": self.provider,
+                                        "model": self.model,
+                                        "error": last_error_message,
+                                        "backoff_seconds": backoff,
+                                    },
+                                )
+                            )
+                        self._sleeper(backoff)
+                        continue
+
+                    if self.audit_spine is not None:
+                        self.audit_spine.record_event(
+                            AuditEvent(
+                                correlation_id=spec_input.correlation_id,
+                                event_name="specialist_failed",
+                                step=f"specialist_{spec_input.specialist_type.value}",
+                                timestamp=time.time(),
+                                details={
+                                    "specialist_type": spec_input.specialist_type.value,
+                                    "provider": self.provider,
+                                    "model": self.model,
+                                    "error": last_error_message,
+                                    "duration": duration,
+                                },
+                            )
+                        )
+                    return SpecialistOutput(
+                        specialist_type=spec_input.specialist_type,
+                        correlation_id=spec_input.correlation_id,
+                        status=SpecialistStatus.FAILED,
+                        findings=(),
+                        error_message=last_error_message,
+                        execution_duration=duration,
+                        usage=comp_usage,
+                    )
+
+                if self.audit_spine is not None:
+                    self.audit_spine.record_event(
+                        AuditEvent(
+                            correlation_id=spec_input.correlation_id,
+                            event_name="specialist_succeeded",
+                            step=f"specialist_{spec_input.specialist_type.value}",
+                            timestamp=time.time(),
+                            details={
+                                "specialist_type": spec_input.specialist_type.value,
+                                "provider": self.provider,
+                                "model": self.model,
+                                "findings_count": len(findings),
+                                "duration": duration,
+                                "total_tokens": comp_usage.total_tokens,
+                                "cost_usd": comp_usage.cost_usd,
+                            },
+                        )
+                    )
+
                 return SpecialistOutput(
                     specialist_type=spec_input.specialist_type,
                     correlation_id=spec_input.correlation_id,
-                    status="completed",
+                    status=SpecialistStatus.COMPLETED,
                     findings=findings,
                     execution_duration=duration,
                     usage=comp_usage,
@@ -381,14 +598,49 @@ class LLMSpecialistAdapter:
                 last_error_message = self._sanitize_error(
                     f"Timeout after {self.timeout_seconds}s querying {self.provider}: {safe_exc_text}"
                 )
-                last_status = "timeout"
+                last_status = SpecialistStatus.TIMEOUT
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                    backoff = self._compute_backoff(attempt)
+                    if self.audit_spine is not None:
+                        self.audit_spine.record_event(
+                            AuditEvent(
+                                correlation_id=spec_input.correlation_id,
+                                event_name="specialist_retry",
+                                step=f"specialist_{spec_input.specialist_type.value}",
+                                timestamp=time.time(),
+                                details={
+                                    "attempt": attempt + 1,
+                                    "max_retries": self.max_retries,
+                                    "provider": self.provider,
+                                    "model": self.model,
+                                    "error": last_error_message,
+                                    "backoff_seconds": backoff,
+                                },
+                            )
+                        )
+                    self._sleeper(backoff)
                     continue
+
+                if self.audit_spine is not None:
+                    self.audit_spine.record_event(
+                        AuditEvent(
+                            correlation_id=spec_input.correlation_id,
+                            event_name="specialist_timeout",
+                            step=f"specialist_{spec_input.specialist_type.value}",
+                            timestamp=time.time(),
+                            details={
+                                "specialist_type": spec_input.specialist_type.value,
+                                "provider": self.provider,
+                                "model": self.model,
+                                "error": last_error_message,
+                                "duration": duration,
+                            },
+                        )
+                    )
                 return SpecialistOutput(
                     specialist_type=spec_input.specialist_type,
                     correlation_id=spec_input.correlation_id,
-                    status="timeout",
+                    status=SpecialistStatus.TIMEOUT,
                     error_message=last_error_message,
                     execution_duration=duration,
                 )
@@ -398,34 +650,103 @@ class LLMSpecialistAdapter:
                 last_error_message = self._sanitize_error(
                     f"Network communication failure querying {self.provider}: {safe_exc_text}"
                 )
-                last_status = "failed"
+                last_status = SpecialistStatus.FAILED
                 if attempt < self.max_retries:
-                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                    backoff = self._compute_backoff(attempt)
+                    if self.audit_spine is not None:
+                        self.audit_spine.record_event(
+                            AuditEvent(
+                                correlation_id=spec_input.correlation_id,
+                                event_name="specialist_retry",
+                                step=f"specialist_{spec_input.specialist_type.value}",
+                                timestamp=time.time(),
+                                details={
+                                    "attempt": attempt + 1,
+                                    "max_retries": self.max_retries,
+                                    "provider": self.provider,
+                                    "model": self.model,
+                                    "error": last_error_message,
+                                    "backoff_seconds": backoff,
+                                },
+                            )
+                        )
+                    self._sleeper(backoff)
                     continue
+
+                if self.audit_spine is not None:
+                    self.audit_spine.record_event(
+                        AuditEvent(
+                            correlation_id=spec_input.correlation_id,
+                            event_name="specialist_failed",
+                            step=f"specialist_{spec_input.specialist_type.value}",
+                            timestamp=time.time(),
+                            details={
+                                "specialist_type": spec_input.specialist_type.value,
+                                "provider": self.provider,
+                                "model": self.model,
+                                "error": last_error_message,
+                                "duration": duration,
+                            },
+                        )
+                    )
                 return SpecialistOutput(
                     specialist_type=spec_input.specialist_type,
                     correlation_id=spec_input.correlation_id,
-                    status="failed",
+                    status=SpecialistStatus.FAILED,
                     error_message=last_error_message,
                     execution_duration=duration,
                 )
             except Exception as exc:
                 duration = round(time.time() - start_time, 3)
                 safe_exc_text = self._sanitize_error(str(exc))
+                err_msg = self._sanitize_error(f"Error querying {self.provider}: {safe_exc_text}")
+                if self.audit_spine is not None:
+                    self.audit_spine.record_event(
+                        AuditEvent(
+                            correlation_id=spec_input.correlation_id,
+                            event_name="specialist_failed",
+                            step=f"specialist_{spec_input.specialist_type.value}",
+                            timestamp=time.time(),
+                            details={
+                                "specialist_type": spec_input.specialist_type.value,
+                                "provider": self.provider,
+                                "model": self.model,
+                                "error": err_msg,
+                                "duration": duration,
+                            },
+                        )
+                    )
                 return SpecialistOutput(
                     specialist_type=spec_input.specialist_type,
                     correlation_id=spec_input.correlation_id,
-                    status="failed",
-                    error_message=self._sanitize_error(f"Error querying {self.provider}: {safe_exc_text}"),
+                    status=SpecialistStatus.FAILED,
+                    error_message=err_msg,
                     execution_duration=duration,
                 )
 
         duration = round(time.time() - start_time, 3)
+        err_msg = last_error_message or f"Retries exhausted for {self.provider}"
+        if self.audit_spine is not None:
+            self.audit_spine.record_event(
+                AuditEvent(
+                    correlation_id=spec_input.correlation_id,
+                    event_name="specialist_failed" if last_status == SpecialistStatus.FAILED else "specialist_timeout",
+                    step=f"specialist_{spec_input.specialist_type.value}",
+                    timestamp=time.time(),
+                    details={
+                        "specialist_type": spec_input.specialist_type.value,
+                        "provider": self.provider,
+                        "model": self.model,
+                        "error": err_msg,
+                        "duration": duration,
+                    },
+                )
+            )
         return SpecialistOutput(
             specialist_type=spec_input.specialist_type,
             correlation_id=spec_input.correlation_id,
             status=last_status,
-            error_message=last_error_message or f"Retries exhausted for {self.provider}",
+            error_message=err_msg,
             execution_duration=duration,
         )
 
@@ -450,6 +771,8 @@ def create_specialist_handlers(
     audit_spine: AuditSpine | None = None,
     max_retries: int = 2,
     retry_backoff_seconds: float = 0.05,
+    max_retry_backoff_seconds: float = 10.0,
+    sleeper: Callable[[float], None] | None = None,
 ) -> dict[SpecialistType, SpecialistHandler]:
     """Factory creating specialist handlers for all 4 canonical review roles."""
     adapter = LLMSpecialistAdapter(
@@ -461,6 +784,8 @@ def create_specialist_handlers(
         audit_spine=audit_spine,
         max_retries=max_retries,
         retry_backoff_seconds=retry_backoff_seconds,
+        max_retry_backoff_seconds=max_retry_backoff_seconds,
+        sleeper=sleeper,
     )
     return {
         SpecialistType.SECURITY: adapter,

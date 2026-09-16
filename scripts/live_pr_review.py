@@ -34,9 +34,11 @@ from pr_review_agent.adapters.github import GitHubNetworkClient
 from pr_review_agent.adapters.llm import LLMSpecialistAdapter
 from pr_review_agent.cost_controls import ProviderPricingRegistry
 from pr_review_agent.github_output import GitHubReviewPublisher, PublicationStatus
+from pr_review_agent.observability import AuditEvent, AuditSpine
 from pr_review_agent.orchestration import (
     ReviewOrchestrator,
     SpecialistInput,
+    SpecialistStatus,
     SpecialistType,
 )
 from pr_review_agent.policy import (
@@ -102,6 +104,12 @@ def run_live_review() -> int:
         diff_content = github_client.get_pull_request_diff(repo_id, pr_number)
         print(f"[*] Retrieved diff: {len(diff_content.encode('utf-8'))} bytes")
 
+        db_path = os.environ.get("DATABASE_PATH", "pr_review_agent.db").strip()
+        print(f"[*] Connecting to Review Truth and audit database: {db_path}")
+        conn = sqlite3.connect(db_path)
+        audit_spine = AuditSpine(conn)
+        truth_store = ReviewTruthStore(conn)
+
         print(f"[*] Initializing {provider.upper()} specialist adapter...")
         pricing = ProviderPricingRegistry()
         specialist_adapter = LLMSpecialistAdapter(
@@ -109,6 +117,7 @@ def run_live_review() -> int:
             security_config=sec_config,
             model=model_name,
             pricing_registry=pricing,
+            audit_spine=audit_spine,
         )
 
         # Run all four specialist evaluations: Security, Quality, Tests, Documentation
@@ -119,6 +128,15 @@ def run_live_review() -> int:
             SpecialistType.TESTS,
             SpecialistType.DOCUMENTATION,
         )
+        succeeded_specialists: list[SpecialistType] = []
+        degraded_specialists: list[SpecialistType] = []
+        failed_specialists: list[SpecialistType] = []
+        timed_out_specialists: list[SpecialistType] = []
+        skipped_specialists: list[SpecialistType] = []
+        failure_reasons: dict[str, str] = {}
+
+        run_corr_id = f"live-pr-{pr_number}-{int(time.time())}"
+
         for spec_type in all_specialist_types:
             print(f"[*] Running {spec_type.value.upper()} specialist...")
             if spec_type == SpecialistType.SECURITY:
@@ -138,7 +156,7 @@ def run_live_review() -> int:
 
             spec_input = SpecialistInput(
                 specialist_type=spec_type,
-                correlation_id=f"live-pr-{pr_number}-{int(time.time())}",
+                correlation_id=run_corr_id,
                 instructions=instructions,
                 changed_files=(),
                 diff_content=diff_content,
@@ -149,7 +167,70 @@ def run_live_review() -> int:
             print(f"    Status: {spec_output.status}, Findings: {len(spec_output.findings)}")
             if spec_output.usage and spec_output.usage.total_tokens:
                 print(f"    Tokens: {spec_output.usage.total_tokens}, Cost: ${spec_output.usage.cost_usd or 0:.4f}")
-            all_candidate_findings.extend(spec_output.findings)
+
+            if spec_output.status in (SpecialistStatus.COMPLETED.value, "completed"):
+                succeeded_specialists.append(spec_type)
+                all_candidate_findings.extend(spec_output.findings)
+            elif spec_output.status in (SpecialistStatus.DEGRADED.value, "degraded"):
+                degraded_specialists.append(spec_type)
+                all_candidate_findings.extend(spec_output.findings)
+                if spec_output.error_message:
+                    failure_reasons[spec_type.value] = spec_output.error_message
+            elif spec_output.status in (SpecialistStatus.TIMEOUT.value, "timeout"):
+                timed_out_specialists.append(spec_type)
+                failure_reasons[spec_type.value] = spec_output.error_message or "Execution timed out"
+            elif spec_output.status in (SpecialistStatus.SKIPPED.value, "skipped"):
+                skipped_specialists.append(spec_type)
+                failure_reasons[spec_type.value] = spec_output.error_message or "Specialist skipped"
+            else:
+                failed_specialists.append(spec_type)
+                failure_reasons[spec_type.value] = spec_output.error_message or "Execution failed"
+
+        # Explicit coverage reporting
+        total_count = len(all_specialist_types)
+        succeeded_count = len(succeeded_specialists)
+        is_degraded = (succeeded_count < total_count) or bool(
+            degraded_specialists or failed_specialists or timed_out_specialists or skipped_specialists
+        )
+        print(f"\n[*] Coverage: {succeeded_count}/{total_count} specialists")
+        if succeeded_specialists:
+            print(f"    Succeeded: {', '.join(s.value.upper() for s in succeeded_specialists)}")
+        if degraded_specialists:
+            print(f"    Degraded:  {', '.join(s.value.upper() for s in degraded_specialists)}")
+        if failed_specialists:
+            print(f"    Failed:    {', '.join(s.value.upper() for s in failed_specialists)}")
+        if timed_out_specialists:
+            print(f"    Timed out: {', '.join(s.value.upper() for s in timed_out_specialists)}")
+        if skipped_specialists:
+            print(f"    Skipped:   {', '.join(s.value.upper() for s in skipped_specialists)}")
+        if failure_reasons:
+            print(f"    Diagnostics: {failure_reasons}")
+
+        if is_degraded:
+            print(f"[!] WARNING: Review coverage is degraded ({succeeded_count}/{total_count} specialists succeeded).")
+            audit_spine.record_event(
+                AuditEvent(
+                    correlation_id=run_corr_id,
+                    event_name="specialist_coverage_degraded",
+                    step="coverage_evaluation",
+                    timestamp=time.time(),
+                    details={
+                        "is_full_coverage": False,
+                        "coverage_ratio": round(succeeded_count / total_count, 4),
+                        "succeeded": [s.value for s in succeeded_specialists],
+                        "degraded": [s.value for s in degraded_specialists],
+                        "failed": [s.value for s in failed_specialists],
+                        "timed_out": [s.value for s in timed_out_specialists],
+                        "skipped": [s.value for s in skipped_specialists],
+                        "failure_reasons": failure_reasons,
+                    },
+                )
+            )
+
+        if succeeded_count == 0 and not degraded_specialists:
+            print("[!] ERROR: All specialists failed to execute. Review run failed.")
+            conn.close()
+            return 1
 
         # Aggregate candidate findings
         aggregator = FindingAggregator()
@@ -160,11 +241,6 @@ def run_live_review() -> int:
         )
         print(f"[*] Aggregated {len(canonical_findings)} canonical findings.")
 
-        # Policy evaluation and Review Truth persistence
-        db_path = os.environ.get("DATABASE_PATH", "pr_review_agent.db").strip()
-        print(f"[*] Connecting to Review Truth and effects database: {db_path}")
-        conn = sqlite3.connect(db_path)
-        truth_store = ReviewTruthStore(conn)
         policy_engine = ReviewPolicyEngine(
             policy_version="v1",
             min_auto_approve_confidence=0.8,
@@ -194,12 +270,13 @@ def run_live_review() -> int:
             print("[*] DRY RUN: Publication skipped. Set PUBLISH_LIVE_REVIEW=1 to publish comments.")
 
         conn.commit()
-        conn.close()
         print("[+] Live integration execution completed successfully.")
         return 0
 
     finally:
-        if hasattr(github_client, "close"):
+        if "conn" in locals() and conn is not None:
+            conn.close()
+        if "github_client" in locals() and hasattr(github_client, "close"):
             github_client.close()
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 import json
 import sqlite3
@@ -31,6 +31,37 @@ class SpecialistType(str, Enum):
     QUALITY = "quality"
     TESTS = "tests"
     DOCUMENTATION = "documentation"
+
+
+class SpecialistStatus(str, Enum):
+    COMPLETED = "completed"
+    DEGRADED = "degraded"
+    FAILED = "failed"
+    TIMEOUT = "timeout"
+    SKIPPED = "skipped"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True)
+class SpecialistCoverageSummary:
+    """Explicit review coverage summary across all evaluated specialists."""
+
+    total_specialists: int
+    succeeded_specialists: tuple[str, ...]
+    degraded_specialists: tuple[str, ...]
+    failed_specialists: tuple[str, ...]
+    timeout_specialists: tuple[str, ...]
+    skipped_specialists: tuple[str, ...]
+    is_full_coverage: bool
+    is_degraded: bool
+    coverage_ratio: float
+    failure_reasons: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def timed_out_specialists(self) -> tuple[str, ...]:
+        return self.timeout_specialists
 
 
 ALL_SPECIALISTS: tuple[SpecialistType, ...] = (
@@ -102,7 +133,7 @@ class SpecialistOutput:
 
     specialist_type: SpecialistType
     correlation_id: str
-    status: str  # 'completed', 'failed', 'timeout'
+    status: SpecialistStatus | str = SpecialistStatus.COMPLETED
     findings: tuple[CandidateFinding, ...] = ()
     error_message: str | None = None
     execution_duration: float = 0.0
@@ -138,6 +169,7 @@ class ReviewLifecycleState:
     aggregation_invoked: bool = False
     is_degraded: bool = False
     degradation_details: dict[str, Any] = field(default_factory=dict)
+    coverage_summary: SpecialistCoverageSummary | None = None
     run_cost_summary: Any | None = None
 
 
@@ -166,6 +198,7 @@ class _GraphState(TypedDict, total=False):
     is_cancelled: bool
     is_degraded: bool
     degradation_details: Annotated[dict[str, Any], _merge_dict]
+    coverage_summary: SpecialistCoverageSummary | None
     run_cost_summary: Any
     step_states: Annotated[dict[str, str], _merge_dict]
     specialist_outputs: Annotated[dict[SpecialistType, SpecialistOutput], _merge_dict]
@@ -553,6 +586,7 @@ class ReviewOrchestrator:
             "is_cancelled": cancellation_token,
             "is_degraded": False,
             "degradation_details": {},
+            "coverage_summary": None,
             "run_cost_summary": None,
             "step_states": {},
             "specialist_outputs": {},
@@ -580,6 +614,7 @@ class ReviewOrchestrator:
             aggregation_invoked=final_dict.get("aggregation_invoked", False),
             is_degraded=final_dict.get("is_degraded", False),
             degradation_details=dict(final_dict.get("degradation_details", {})),
+            coverage_summary=final_dict.get("coverage_summary"),
             run_cost_summary=final_dict.get("run_cost_summary"),
         )
 
@@ -662,6 +697,15 @@ class ReviewOrchestrator:
 
     def _make_specialist_node(self, spec_type: SpecialistType):
         async def specialist_node(state: _GraphState) -> dict:
+            events = [
+                AuditEvent(
+                    correlation_id=state["correlation_id"],
+                    event_name="specialist_started",
+                    step=f"specialist_{spec_type.value}",
+                    timestamp=time.time(),
+                    details={"specialist_type": spec_type.value},
+                )
+            ]
             spec_input = SpecialistInput(
                 specialist_type=spec_type,
                 correlation_id=state["correlation_id"],
@@ -673,9 +717,9 @@ class ReviewOrchestrator:
             )
             output = await self._run_single_specialist(spec_type, spec_input, state["deadline"])
 
-            events = []
             partial_fails = []
-            if output.status == "completed":
+            status_str = str(output.status)
+            if status_str in (SpecialistStatus.COMPLETED.value, "completed"):
                 events.append(
                     AuditEvent(
                         correlation_id=state["correlation_id"],
@@ -685,12 +729,54 @@ class ReviewOrchestrator:
                         details={"findings_count": len(output.findings), "duration": output.execution_duration},
                     )
                 )
+                events.append(
+                    AuditEvent(
+                        correlation_id=state["correlation_id"],
+                        event_name="specialist_succeeded",
+                        step=f"specialist_{spec_type.value}",
+                        timestamp=time.time(),
+                        details={"findings_count": len(output.findings), "duration": output.execution_duration},
+                    )
+                )
+            elif status_str in (SpecialistStatus.DEGRADED.value, "degraded"):
+                partial_fails.append(spec_type.value)
+                events.append(
+                    AuditEvent(
+                        correlation_id=state["correlation_id"],
+                        event_name="specialist_degraded",
+                        step=f"specialist_{spec_type.value}",
+                        timestamp=time.time(),
+                        details={"error": output.error_message, "findings_count": len(output.findings)},
+                    )
+                )
+            elif status_str in (SpecialistStatus.SKIPPED.value, "skipped"):
+                partial_fails.append(spec_type.value)
+                events.append(
+                    AuditEvent(
+                        correlation_id=state["correlation_id"],
+                        event_name="specialist_skipped",
+                        step=f"specialist_{spec_type.value}",
+                        timestamp=time.time(),
+                        details={"error": output.error_message},
+                    )
+                )
+            elif status_str in (SpecialistStatus.TIMEOUT.value, "timeout"):
+                partial_fails.append(spec_type.value)
+                events.append(
+                    AuditEvent(
+                        correlation_id=state["correlation_id"],
+                        event_name="specialist_timeout",
+                        step=f"specialist_{spec_type.value}",
+                        timestamp=time.time(),
+                        details={"error": output.error_message},
+                    )
+                )
             else:
                 partial_fails.append(spec_type.value)
                 events.append(
                     AuditEvent(
                         correlation_id=state["correlation_id"],
-                        event_name="specialist_failed" if output.status == "failed" else "specialist_timeout",
+                        event_name="specialist_failed",
                         step=f"specialist_{spec_type.value}",
                         timestamp=time.time(),
                         details={"error": output.error_message},
@@ -699,7 +785,7 @@ class ReviewOrchestrator:
 
             return {
                 "specialist_outputs": {spec_type: output},
-                "step_states": {f"specialist_{spec_type.value}": output.status},
+                "step_states": {f"specialist_{spec_type.value}": status_str},
                 "partial_failures": partial_fails,
                 "audit_trail": events,
             }
@@ -728,7 +814,85 @@ class ReviewOrchestrator:
             }
 
         outputs = state.get("specialist_outputs", {})
-        completed_count = sum(1 for o in outputs.values() if o.status == "completed")
+        succeeded: list[str] = []
+        degraded: list[str] = []
+        failed: list[str] = []
+        timed_out: list[str] = []
+        skipped: list[str] = []
+        reasons: dict[str, str] = {}
+
+        for spec_type in ALL_SPECIALISTS:
+            out = outputs.get(spec_type)
+            if out is None:
+                skipped.append(spec_type.value)
+                reasons[spec_type.value] = "Specialist omitted or not dispatched"
+            elif str(out.status) in (SpecialistStatus.COMPLETED.value, "completed"):
+                succeeded.append(spec_type.value)
+            elif str(out.status) in (SpecialistStatus.DEGRADED.value, "degraded"):
+                degraded.append(spec_type.value)
+                if out.error_message:
+                    reasons[spec_type.value] = out.error_message
+            elif str(out.status) in (SpecialistStatus.TIMEOUT.value, "timeout"):
+                timed_out.append(spec_type.value)
+                reasons[spec_type.value] = out.error_message or "Specialist timeout"
+            elif str(out.status) in (SpecialistStatus.SKIPPED.value, "skipped"):
+                skipped.append(spec_type.value)
+                reasons[spec_type.value] = out.error_message or "Specialist skipped"
+            else:
+                failed.append(spec_type.value)
+                reasons[spec_type.value] = out.error_message or "Specialist failed"
+
+        completed_count = len(succeeded)
+        total_specialists = len(ALL_SPECIALISTS)
+        is_full_coverage = (completed_count == total_specialists)
+        is_run_degraded = (not is_full_coverage) or bool(state.get("is_degraded", False))
+        coverage_ratio = round(completed_count / total_specialists, 3) if total_specialists > 0 else 0.0
+
+        coverage_summary = SpecialistCoverageSummary(
+            total_specialists=total_specialists,
+            succeeded_specialists=tuple(succeeded),
+            degraded_specialists=tuple(degraded),
+            failed_specialists=tuple(failed),
+            timeout_specialists=tuple(timed_out),
+            skipped_specialists=tuple(skipped),
+            is_full_coverage=is_full_coverage,
+            is_degraded=is_run_degraded,
+            coverage_ratio=coverage_ratio,
+            failure_reasons=reasons,
+        )
+
+        updated_degradation_details = dict(state.get("degradation_details", {}))
+        updated_degradation_details.update({
+            "coverage_summary": asdict(coverage_summary),
+            "succeeded_specialists": succeeded,
+            "failed_specialists": failed,
+            "degraded_specialists": degraded,
+            "timeout_specialists": timed_out,
+            "skipped_specialists": skipped,
+            "is_full_coverage": is_full_coverage,
+            "coverage_ratio": coverage_ratio,
+            "failure_reasons": reasons,
+        })
+
+        if is_run_degraded:
+            events.append(
+                AuditEvent(
+                    correlation_id=state["correlation_id"],
+                    event_name="specialist_coverage_degraded",
+                    step="evaluate_terminal",
+                    timestamp=now,
+                    details={
+                        "total_specialists": total_specialists,
+                        "succeeded": succeeded,
+                        "degraded": degraded,
+                        "failed": failed,
+                        "timeout": timed_out,
+                        "skipped": skipped,
+                        "coverage_ratio": coverage_ratio,
+                        "reasons": reasons,
+                    },
+                )
+            )
 
         # Cost recording and accounting (FR-19)
         run_cost_summary = None
@@ -830,6 +994,9 @@ class ReviewOrchestrator:
             return {
                 "step_states": {"specialists_dispatch": "failed"},
                 "terminal_status": "failed",
+                "is_degraded": True,
+                "degradation_details": updated_degradation_details,
+                "coverage_summary": coverage_summary,
                 "aggregation_invoked": False,
                 "run_cost_summary": run_cost_summary,
                 "audit_trail": events,
@@ -844,12 +1011,16 @@ class ReviewOrchestrator:
                 details={
                     "successful_specialists": completed_count,
                     "partial_failures": state.get("partial_failures", []),
+                    "is_full_coverage": is_full_coverage,
                 },
             )
         )
         return {
             "step_states": {"specialists_dispatch": "completed", "aggregation": "ready"},
             "terminal_status": "completed",
+            "is_degraded": is_run_degraded,
+            "degradation_details": updated_degradation_details,
+            "coverage_summary": coverage_summary,
             "aggregation_invoked": True,
             "run_cost_summary": run_cost_summary,
             "audit_trail": events,
@@ -870,8 +1041,9 @@ class ReviewOrchestrator:
             return SpecialistOutput(
                 specialist_type=spec_type,
                 correlation_id=spec_input.correlation_id,
-                status="completed",
+                status=SpecialistStatus.SKIPPED,
                 findings=(),
+                error_message=f"No specialist handler registered for {spec_type.value}",
                 execution_duration=time.time() - start_time,
             )
 
@@ -903,7 +1075,7 @@ class ReviewOrchestrator:
             return SpecialistOutput(
                 specialist_type=spec_type,
                 correlation_id=spec_input.correlation_id,
-                status="timeout",
+                status=SpecialistStatus.TIMEOUT,
                 error_message="Specialist execution exceeded run deadline",
                 execution_duration=time.time() - start_time,
             )
@@ -911,7 +1083,7 @@ class ReviewOrchestrator:
             return SpecialistOutput(
                 specialist_type=spec_type,
                 correlation_id=spec_input.correlation_id,
-                status="failed",
+                status=SpecialistStatus.FAILED,
                 error_message=str(err),
                 execution_duration=time.time() - start_time,
             )
