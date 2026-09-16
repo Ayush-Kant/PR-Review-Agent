@@ -41,7 +41,9 @@ from pr_review_agent.policy import (
     ReviewTruthStore,
     TruthState,
 )
+from pr_review_agent.adapters.redis_queue import RedisJobQueue
 from pr_review_agent.service_config import ServiceConfig, load_service_config
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +51,14 @@ logger = logging.getLogger(__name__)
 def reconstruct_snapshot(
     job_or_payload: ReviewJob | Mapping[str, Any] | str,
     connection: sqlite3.Connection | None = None,
+    queue: DurableQueueProtocol | None = None,
 ) -> ReviewSnapshot:
     """Reconstruct an immutable ReviewSnapshot from a job or serialized payload."""
     if isinstance(job_or_payload, ReviewJob):
         if hasattr(job_or_payload, "payload_json"):
             data = json.loads(getattr(job_or_payload, "payload_json"))
+        elif queue is not None and hasattr(queue, "get_job_payload"):
+            data = queue.get_job_payload(job_or_payload.job_id)
         elif connection is not None:
             row = connection.execute(
                 "SELECT payload_json FROM review_jobs WHERE job_id = ?",
@@ -61,6 +66,7 @@ def reconstruct_snapshot(
             ).fetchone()
             data = json.loads(row[0]) if row else {}
         else:
+
             data = {
                 "repository_id": job_or_payload.repository_id,
                 "repository_full_name": job_or_payload.repository_id,
@@ -167,7 +173,10 @@ class AutonomousReviewWorker:
     ) -> tuple[ReviewJob | None, ReviewLifecycleState | None]:
         """Lease one eligible job and process it through the full review pipeline."""
         current_time = time.time() if now is None else now
-        job = self.queue.lease_next_job(now=current_time)
+        if isinstance(self.queue, RedisJobQueue):
+            job = await asyncio.to_thread(self.queue.lease_next_job, now=current_time)
+        else:
+            job = self.queue.lease_next_job(now=current_time)
         if job is None:
             return None, None
 
@@ -188,7 +197,7 @@ class AutonomousReviewWorker:
         )
 
         try:
-            snapshot = reconstruct_snapshot(job, connection=self.connection)
+            snapshot = reconstruct_snapshot(job, connection=self.connection, queue=self.queue)
 
             # Fetch PR unified diff
             if hasattr(self.github_client, "get_pull_request_diff"):
@@ -212,7 +221,10 @@ class AutonomousReviewWorker:
 
             # Handle terminal failures or cancellations
             if lifecycle_state.terminal_status in (JobState.FAILED.value, "failed"):
-                self.queue.mark_failed(job.job_id, "Review run failed during execution", now=current_time)
+                if isinstance(self.queue, RedisJobQueue):
+                    await asyncio.to_thread(self.queue.mark_failed, job.job_id, "Review run failed during execution", now=current_time)
+                else:
+                    self.queue.mark_failed(job.job_id, "Review run failed during execution", now=current_time)
                 self.audit_spine.record_event(
                     AuditEvent(
                         correlation_id=correlation_id,
@@ -225,7 +237,10 @@ class AutonomousReviewWorker:
                 return job, lifecycle_state
 
             if lifecycle_state.is_cancelled or lifecycle_state.terminal_status in (JobState.CANCELLED.value, "cancelled"):
-                self.queue.cancel_job(job.job_id, "Review run cancelled during execution", now=current_time)
+                if isinstance(self.queue, RedisJobQueue):
+                    await asyncio.to_thread(self.queue.cancel_job, job.job_id, "Review run cancelled during execution", now=current_time)
+                else:
+                    self.queue.cancel_job(job.job_id, "Review run cancelled during execution", now=current_time)
                 self.audit_spine.record_event(
                     AuditEvent(
                         correlation_id=correlation_id,
@@ -236,6 +251,8 @@ class AutonomousReviewWorker:
                     )
                 )
                 return job, lifecycle_state
+
+
 
             # Extract candidate findings from specialist outputs (completed or degraded only)
             all_candidate_findings: list[CandidateFinding] = []
@@ -297,7 +314,11 @@ class AutonomousReviewWorker:
                         )
 
             # Mark job completed in queue
-            self.queue.mark_completed(job.job_id, now=current_time)
+            if isinstance(self.queue, RedisJobQueue):
+                await asyncio.to_thread(self.queue.mark_completed, job.job_id, now=current_time)
+            else:
+                self.queue.mark_completed(job.job_id, now=current_time)
+
 
             coverage_data: dict[str, Any] = {}
             if lifecycle_state.coverage_summary:

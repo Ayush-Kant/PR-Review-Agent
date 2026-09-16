@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "f0b8e03faa1e82e4fe40fe9345eb76f654d7115d",
-  "sourceHash": "33ebd1cea4ac4fd3178e9edaed64931073484fcd62c64986959487cb229757a7",
+  "revision": "ba183a7f5a0413757ed13c6c062b156fddaaab3c",
+  "sourceHash": "d7d7edceb2d284eef711491da57d95a18e6abebe32f24704a3f6b1d2f9bea27b",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -27,7 +27,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "d419e455ff0479237ef5fcf41105e896eaf7816577e27adce595ea66ad8d5feb"
+      "contentHash": "053e961e2697762cc41a4e563a0057f7d7fc299b0bb7561c639bd8462a6b625c"
     },
     {
       "id": "file:pr_review_agent/adapters/github.py",
@@ -50,6 +50,16 @@
       "contentHash": "d8dbdff275c5a9a2df189fdeae42391e877a773b7f6ad433d7556a85244dbbd1"
     },
     {
+      "id": "file:pr_review_agent/adapters/redis_queue.py",
+      "type": "file",
+      "label": "pr_review_agent/adapters/redis_queue.py",
+      "path": "pr_review_agent/adapters/redis_queue.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "8cda0a0be65302663593c6ce5baf1a7192ba82d1d56f1704f94c30de920cd79f"
+    },
+    {
       "id": "file:pr_review_agent/adapters/webhook_ingress.py",
       "type": "file",
       "label": "pr_review_agent/adapters/webhook_ingress.py",
@@ -57,7 +67,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "147a19a76909d03233d5d5c41e9cf03406294a5767fb48e1fc47911fb12f28b0"
+      "contentHash": "a693d83f637a26e150ad3c2adf943c8e363d651972c25cb753dabbf39aa1ca65"
     },
     {
       "id": "file:pr_review_agent/cost_controls.py",
@@ -157,7 +167,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "866adb62536d9a3ad1634900173ffb4a8bf9d9d833a4d8cc0da1ac0234a4fa89"
+      "contentHash": "e248189abba958df157fb435cc7f639a15b92b94ac1b70f39124db29411c4579"
     },
     {
       "id": "file:pr_review_agent/service_config.py",
@@ -167,7 +177,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "826a9b72ce61c9c0f7f18b6a198cb00e9f06ed5ebf822d5e2d8741e6f8a0d0d7"
+      "contentHash": "b06d3596a8cd2931ddffcef7c0782d25f8719ca19cfb9499ab16ca05a57c8b3c"
     },
     {
       "id": "file:pr_review_agent/worker.py",
@@ -177,7 +187,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "770a52cef8c75c7ea6ebd74c196ee71e79187b986cf80b4d86f38ba817e0921e"
+      "contentHash": "3ba37f7c2544abf83cc0d61953d91f0b4e9957b9c822e70d8ea5617da86d79a4"
     },
     {
       "id": "file:scratch/analyze_genesis.py",
@@ -338,6 +348,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "e1524b86193b3b94524b2154e9e2e0fd43904146a2a03abff2abe82a0c7446ab"
+    },
+    {
+      "id": "file:tests/test_redis_queue_adapter.py",
+      "type": "file",
+      "label": "tests/test_redis_queue_adapter.py",
+      "path": "tests/test_redis_queue_adapter.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "e074d28eab47da2b8f4422995044a6cd71437382fc798e4bd6a9ae159cda562c"
     },
     {
       "id": "file:tests/test_retrieval_and_findings.py",

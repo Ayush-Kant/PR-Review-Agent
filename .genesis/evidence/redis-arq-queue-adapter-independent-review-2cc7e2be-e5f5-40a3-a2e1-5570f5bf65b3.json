@@ -1,0 +1,13 @@
+{
+  "task": "redis-arq-queue-adapter",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "2cc7e2be-e5f5-40a3-a2e1-5570f5bf65b3",
+  "human": "Ayush Kant",
+  "reason": "Verified Redis/ARQ production queue adapter satisfies DurableQueueProtocol contract parity (11/11 tests), lease token validation, zombie recovery, repo concurrency bounding (NFR-05), 14 failure injection scenarios, and 275/275 full regression.",
+  "observed_at": "2026-09-16T20:52:13.528Z",
+  "source_hash": "0e190e36a8e7bb33fd26ac0bcb3523a3cdfd900104e82bb6a9369de3514b83df",
+  "config_hash": "590d1e90cfd576effd158dad86b669fd162e3d7618efad9dd95e62c7f2edfbaf",
+  "reviewed_proofs": "ae8720424acaf50b85fd58121f827b8951d15b6633fe54656aa700a98c1440c2",
+  "hash": "ba3e1fdf339e2a2cbbdfc093b7220938d6580ab8c36b28047c66c944c29410ec"
+}

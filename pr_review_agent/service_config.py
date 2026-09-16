@@ -30,17 +30,22 @@ class ServiceConfig:
     publish_enabled: bool = False
     max_diff_bytes: int = 500_000
     api_key: str = ""
+    queue_backend: str = "sqlite"
+    redis_url: str = ""
 
     def __repr__(self) -> str:
         """Prevent secrets from leaking into logs or representations."""
+        masked_redis = "'***'" if self.redis_url else "''"
         return (
             f"ServiceConfig(host={self.host!r}, port={self.port}, "
             f"model_provider={self.model_provider!r}, model_name={self.model_name!r}, "
             f"database_path={self.database_path!r}, authorized_tenant={self.authorized_tenant!r}, "
             f"authorized_repositories={self.authorized_repositories!r}, "
-            f"publish_enabled={self.publish_enabled}, github_token='***', webhook_secret=b'***', "
+            f"publish_enabled={self.publish_enabled}, queue_backend={self.queue_backend!r}, "
+            f"redis_url={masked_redis}, github_token='***', webhook_secret=b'***', "
             f"api_key='***')"
         )
+
 
     def to_security_config(
         self,
@@ -111,6 +116,11 @@ def load_service_config(
     publish_enabled = env_map.get("PUBLISH_LIVE_REVIEW", "0").strip() in ("1", "true", "TRUE")
     max_diff_bytes = int(env_map.get("MAX_DIFF_BYTES", "500000").strip())
 
+    queue_backend = env_map.get("QUEUE_BACKEND", "sqlite").strip().lower()
+    if queue_backend not in ("sqlite", "redis"):
+        raise ValueError(f"Invalid QUEUE_BACKEND '{queue_backend}'. Must be 'sqlite' or 'redis'.")
+    redis_url = env_map.get("REDIS_URL", "").strip()
+
     if require_live_credentials:
         if not github_token:
             raise ValueError("Missing required GITHUB_TOKEN in environment.")
@@ -122,6 +132,8 @@ def load_service_config(
             raise ValueError("Missing required OPENAI_API_KEY for provider 'openai'.")
         if provider == "groq" and not env_map.get("GROQ_API_KEY", "").strip():
             raise ValueError("Missing required GROQ_API_KEY for provider 'groq'.")
+        if queue_backend == "redis" and not redis_url:
+            raise ValueError("Missing required REDIS_URL when QUEUE_BACKEND='redis'.")
 
     api_key = (
         env_map.get("OPENAI_API_KEY", "").strip()
@@ -142,4 +154,6 @@ def load_service_config(
         publish_enabled=publish_enabled,
         max_diff_bytes=max_diff_bytes,
         api_key=api_key,
+        queue_backend=queue_backend,
+        redis_url=redis_url,
     )

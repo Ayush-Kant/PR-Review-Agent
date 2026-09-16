@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 import time
 from typing import Any
@@ -11,9 +12,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from pr_review_agent.adapters.redis_queue import RedisJobQueue
 from pr_review_agent.intake import WebhookIntake
 from pr_review_agent.observability import AuditEvent, AuditSpine
 from pr_review_agent.orchestration import DurableJobQueue, DurableQueueProtocol
+
+
 
 
 class WebhookIngressHandler:
@@ -88,8 +92,17 @@ class WebhookIngressHandler:
             )
 
         try:
-            job = self.job_queue.enqueue(result.snapshot, delivery_id=result.delivery_id)
+            if isinstance(self.job_queue, RedisJobQueue):
+                job = await asyncio.to_thread(
+                    self.job_queue.enqueue,
+                    result.snapshot,
+                    delivery_id=result.delivery_id,
+                )
+            else:
+                job = self.job_queue.enqueue(result.snapshot, delivery_id=result.delivery_id)
             job_id = job.job_id
+
+
         except Exception as exc:
             return JSONResponse(
                 {

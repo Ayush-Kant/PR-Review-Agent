@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-16T19:39:59.395Z
+- plan approval: Ayush Kant at 2026-09-16T20:36:01.769Z
 
 ## Tasks
 
@@ -134,5 +134,13 @@
 - requirements: FR-03
 - scope: not bounded
 - gates: test: python -m pytest tests/test_queue_and_checkpoint_contracts.py
+- next: Run the task pre-flight.
+
+### redis-arq-queue-adapter — Implement Redis/ARQ distributed execution adapter satisfying DurableQueueProtocol
+
+- state/risk: done / medium
+- requirements: FR-03
+- scope: not bounded
+- gates: test: python -m pytest tests/test_redis_queue_adapter.py tests/test_queue_and_checkpoint_contracts.py, independent-review: pass
 - next: Run the task pre-flight.
 
