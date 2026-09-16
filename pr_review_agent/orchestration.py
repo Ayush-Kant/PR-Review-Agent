@@ -91,6 +91,8 @@ class ReviewJob:
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     next_run_at: float = field(default_factory=time.time)
+    lease_token: str | None = None
+
 
 
 @dataclass(frozen=True)
@@ -255,17 +257,38 @@ class DurableQueueProtocol(Protocol):
         """Atomically lease the next scheduled job."""
         ...
 
-    def mark_completed(self, job_id: str, now: float | None = None) -> ReviewJob:
+    def mark_completed(
+        self,
+        job_id: str,
+        now: float | None = None,
+        *,
+        lease_token: str | None = None,
+    ) -> ReviewJob:
         """Mark job successfully completed."""
         ...
 
-    def mark_failed(self, job_id: str, error: str, now: float | None = None) -> ReviewJob:
+    def mark_failed(
+        self,
+        job_id: str,
+        error: str,
+        now: float | None = None,
+        *,
+        lease_token: str | None = None,
+    ) -> ReviewJob:
         """Handle failure: apply exponential backoff retry or transition to dead-letter."""
         ...
 
-    def cancel_job(self, job_id: str, reason: str = "", now: float | None = None) -> ReviewJob:
+    def cancel_job(
+        self,
+        job_id: str,
+        reason: str = "",
+        now: float | None = None,
+        *,
+        lease_token: str | None = None,
+    ) -> ReviewJob:
         """Cancel a job, recording reason."""
         ...
+
 
     def get_job(self, job_id: str) -> ReviewJob | None:
         """Retrieve a review job by its durable ID."""
@@ -505,7 +528,13 @@ class DurableJobQueue:
             raise
         return self.get_job(selected_job_id)
 
-    def mark_completed(self, job_id: str, now: float | None = None) -> ReviewJob:
+    def mark_completed(
+        self,
+        job_id: str,
+        now: float | None = None,
+        *,
+        lease_token: str | None = None,
+    ) -> ReviewJob:
         """Mark job successfully completed."""
         current_time = time.time() if now is None else now
         with self.connection:
@@ -518,7 +547,14 @@ class DurableJobQueue:
             raise KeyError(f"Job {job_id} not found")
         return job
 
-    def mark_failed(self, job_id: str, error: str, now: float | None = None) -> ReviewJob:
+    def mark_failed(
+        self,
+        job_id: str,
+        error: str,
+        now: float | None = None,
+        *,
+        lease_token: str | None = None,
+    ) -> ReviewJob:
         """Handle failure: apply exponential backoff retry or transition to dead-letter."""
         current_time = time.time() if now is None else now
         job = self.get_job(job_id)
@@ -544,8 +580,16 @@ class DurableJobQueue:
             )
         return self.get_job(job_id)  # type: ignore[return-value]
 
-    def cancel_job(self, job_id: str, reason: str = "", now: float | None = None) -> ReviewJob:
+    def cancel_job(
+        self,
+        job_id: str,
+        reason: str = "",
+        now: float | None = None,
+        *,
+        lease_token: str | None = None,
+    ) -> ReviewJob:
         """Cancel a job, recording reason."""
+
         current_time = time.time() if now is None else now
         with self.connection:
             self.connection.execute(

@@ -41,7 +41,7 @@ from pr_review_agent.policy import (
     ReviewTruthStore,
     TruthState,
 )
-from pr_review_agent.adapters.redis_queue import RedisJobQueue
+from pr_review_agent.adapters.redis_queue import RedisJobQueue, StaleLeaseError
 from pr_review_agent.service_config import ServiceConfig, load_service_config
 
 
@@ -167,20 +167,23 @@ class AutonomousReviewWorker:
         self.aggregator = aggregator or FindingAggregator()
         self.publish_enabled = config.publish_enabled
 
-    async def process_one_job(
+    async def process_claimed_job(
         self,
+        job: ReviewJob,
+        lease_token: str | None = None,
         now: float | None = None,
-    ) -> tuple[ReviewJob | None, ReviewLifecycleState | None]:
-        """Lease one eligible job and process it through the full review pipeline."""
-        current_time = time.time() if now is None else now
-        if isinstance(self.queue, RedisJobQueue):
-            job = await asyncio.to_thread(self.queue.lease_next_job, now=current_time)
-        else:
-            job = self.queue.lease_next_job(now=current_time)
-        if job is None:
-            return None, None
+    ) -> ReviewLifecycleState:
+        """Process an already-claimed ReviewJob through the full review pipeline with lease token propagation.
 
+        ARQ Integration / Distributed Invariant:
+        Retains and propagates lease_token to every terminal queue mutation (mark_completed, mark_failed, cancel_job).
+        If another worker has claimed the job (e.g. following lease expiry), terminal mutations
+        will raise StaleLeaseError, rejecting stale worker execution without corrupting the queue.
+        """
+        current_time = time.time() if now is None else now
+        effective_token = lease_token if lease_token is not None else getattr(job, "lease_token", None)
         correlation_id = job.delivery_id
+
         self.audit_spine.record_event(
             AuditEvent(
                 correlation_id=correlation_id,
@@ -192,6 +195,7 @@ class AutonomousReviewWorker:
                     "repository_id": job.repository_id,
                     "pull_request_number": job.pull_request_number,
                     "attempt_count": job.attempt_count,
+                    "lease_token": effective_token,
                 },
             )
         )
@@ -222,9 +226,20 @@ class AutonomousReviewWorker:
             # Handle terminal failures or cancellations
             if lifecycle_state.terminal_status in (JobState.FAILED.value, "failed"):
                 if isinstance(self.queue, RedisJobQueue):
-                    await asyncio.to_thread(self.queue.mark_failed, job.job_id, "Review run failed during execution", now=current_time)
+                    await asyncio.to_thread(
+                        self.queue.mark_failed,
+                        job.job_id,
+                        "Review run failed during execution",
+                        now=current_time,
+                        lease_token=effective_token,
+                    )
                 else:
-                    self.queue.mark_failed(job.job_id, "Review run failed during execution", now=current_time)
+                    self.queue.mark_failed(
+                        job.job_id,
+                        "Review run failed during execution",
+                        now=current_time,
+                        lease_token=effective_token,
+                    )
                 self.audit_spine.record_event(
                     AuditEvent(
                         correlation_id=correlation_id,
@@ -234,13 +249,24 @@ class AutonomousReviewWorker:
                         details={"job_id": job.job_id, "reason": "Review run failed during execution"},
                     )
                 )
-                return job, lifecycle_state
+                return lifecycle_state
 
             if lifecycle_state.is_cancelled or lifecycle_state.terminal_status in (JobState.CANCELLED.value, "cancelled"):
                 if isinstance(self.queue, RedisJobQueue):
-                    await asyncio.to_thread(self.queue.cancel_job, job.job_id, "Review run cancelled during execution", now=current_time)
+                    await asyncio.to_thread(
+                        self.queue.cancel_job,
+                        job.job_id,
+                        "Review run cancelled during execution",
+                        now=current_time,
+                        lease_token=effective_token,
+                    )
                 else:
-                    self.queue.cancel_job(job.job_id, "Review run cancelled during execution", now=current_time)
+                    self.queue.cancel_job(
+                        job.job_id,
+                        "Review run cancelled during execution",
+                        now=current_time,
+                        lease_token=effective_token,
+                    )
                 self.audit_spine.record_event(
                     AuditEvent(
                         correlation_id=correlation_id,
@@ -250,9 +276,7 @@ class AutonomousReviewWorker:
                         details={"job_id": job.job_id},
                     )
                 )
-                return job, lifecycle_state
-
-
+                return lifecycle_state
 
             # Extract candidate findings from specialist outputs (completed or degraded only)
             all_candidate_findings: list[CandidateFinding] = []
@@ -313,12 +337,20 @@ class AutonomousReviewWorker:
                             )
                         )
 
-            # Mark job completed in queue
+            # Mark job completed in queue with exact lease token
             if isinstance(self.queue, RedisJobQueue):
-                await asyncio.to_thread(self.queue.mark_completed, job.job_id, now=current_time)
+                await asyncio.to_thread(
+                    self.queue.mark_completed,
+                    job.job_id,
+                    now=current_time,
+                    lease_token=effective_token,
+                )
             else:
-                self.queue.mark_completed(job.job_id, now=current_time)
-
+                self.queue.mark_completed(
+                    job.job_id,
+                    now=current_time,
+                    lease_token=effective_token,
+                )
 
             coverage_data: dict[str, Any] = {}
             if lifecycle_state.coverage_summary:
@@ -351,10 +383,43 @@ class AutonomousReviewWorker:
                 )
             )
 
-            return job, lifecycle_state
+            return lifecycle_state
 
+        except StaleLeaseError:
+            logger.warning(
+                "Worker lease expired or stolen for job %s (token: %s); mutation rejected",
+                job.job_id,
+                effective_token,
+            )
+            self.audit_spine.record_event(
+                AuditEvent(
+                    correlation_id=correlation_id,
+                    event_name="worker_stale_lease_rejected",
+                    step="worker",
+                    timestamp=current_time,
+                    details={"job_id": job.job_id, "lease_token": effective_token},
+                )
+            )
+            raise
         except Exception as exc:
-            self.queue.mark_failed(job.job_id, str(exc), now=current_time)
+            try:
+                if isinstance(self.queue, RedisJobQueue):
+                    await asyncio.to_thread(
+                        self.queue.mark_failed,
+                        job.job_id,
+                        str(exc),
+                        now=current_time,
+                        lease_token=effective_token,
+                    )
+                else:
+                    self.queue.mark_failed(
+                        job.job_id,
+                        str(exc),
+                        now=current_time,
+                        lease_token=effective_token,
+                    )
+            except StaleLeaseError:
+                pass  # Stale worker rejection takes precedence
             self.audit_spine.record_event(
                 AuditEvent(
                     correlation_id=correlation_id,
@@ -365,6 +430,26 @@ class AutonomousReviewWorker:
                 )
             )
             raise
+
+    async def process_one_job(
+        self,
+        now: float | None = None,
+    ) -> tuple[ReviewJob | None, ReviewLifecycleState | None]:
+        """Lease one eligible job and process it through the full review pipeline."""
+        current_time = time.time() if now is None else now
+        if isinstance(self.queue, RedisJobQueue):
+            job = await asyncio.to_thread(self.queue.lease_next_job, now=current_time)
+        else:
+            job = self.queue.lease_next_job(now=current_time)
+        if job is None:
+            return None, None
+
+        lifecycle_state = await self.process_claimed_job(
+            job,
+            lease_token=getattr(job, "lease_token", None),
+            now=current_time,
+        )
+        return job, lifecycle_state
 
     async def run_worker_loop(
         self,

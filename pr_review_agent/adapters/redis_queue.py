@@ -8,8 +8,9 @@ import time
 from typing import Any
 import uuid
 
-import redis
 from arq.constants import abort_jobs_ss, default_queue_name
+from arq.jobs import serialize_job
+import redis
 
 from pr_review_agent.intake import ReviewSnapshot
 from pr_review_agent.orchestration import (
@@ -20,6 +21,41 @@ from pr_review_agent.orchestration import (
 
 logger = logging.getLogger(__name__)
 
+# Atomic Lua script for repository concurrency checking and slot reservation.
+# Guarantees that two workers racing cannot both observe capacity and exceed max_concurrency_per_repo.
+CLAIM_JOB_LUA = """
+local cap = tonumber(ARGV[2])
+if cap and cap > 0 then
+    local current_count = redis.call('SCARD', KEYS[1])
+    if current_count >= cap then
+        return 'repo_at_capacity'
+    end
+end
+
+if KEYS[4] ~= '' then
+    local removed = redis.call('ZREM', KEYS[4], ARGV[1])
+    if removed == 0 then
+        return 'already_leased'
+    end
+end
+
+redis.call('SADD', KEYS[1], ARGV[1])
+redis.call('SADD', KEYS[2], ARGV[1])
+
+local current_attempts = tonumber(redis.call('HGET', KEYS[3], 'attempt_count') or '0')
+local new_attempts = current_attempts + 1
+
+redis.call('HSET', KEYS[3],
+    'state', 'running',
+    'attempt_count', tostring(new_attempts),
+    'lease_token', ARGV[4],
+    'lease_expires_at', ARGV[5],
+    'updated_at', ARGV[3]
+)
+
+return 'ok'
+"""
+
 
 class StaleLeaseError(RuntimeError):
     """Raised when a worker attempts to mutate a job whose lease has expired or been reassigned."""
@@ -29,14 +65,15 @@ class RedisJobQueue(DurableQueueProtocol):
     """Redis / ARQ execution queue adapter satisfying DurableQueueProtocol.
 
     Architecture & Invariants:
-    1. ARQ as Single Queue: 'arq:queue' (or configured queue_name) is the sole scheduling queue.
-       Jobs are scored by eligibility timestamp in milliseconds.
+    1. Real ARQ Job Lifecycle: 'arq:queue' is the sole scheduling queue; 'arq:job:{job_id}' contains
+       valid ARQ 0.28.0 serialized jobs consumable by standard ARQ workers.
     2. Durable Review State: Domain job state and snapshot provenance are persisted in 'review:job:{job_id}'.
        ARQ execution is strictly coordinated without replacing business truth (ReviewTruth / AuditSpine).
     3. Delivery Idempotency: 'review:delivery:{delivery_id}' ensures O(1) duplicate protection.
     4. Logical Attempt Authority: ReviewJob.attempt_count and max_retries govern retry limits and exponential backoff.
     5. Lease Ownership: Atomic lease_token prevents stale workers from completing expired/reclaimed jobs.
-    6. Repository Concurrency (NFR-05): 'review:repo_running:{repo_id}' enforces max_concurrency_per_repo.
+    6. Atomic Repository Concurrency (NFR-05): Atomic Lua script enforces max_concurrency_per_repo.
+    7. Indexed Zombie Recovery: 'review:jobs:running' set tracks active jobs without full keyspace scans.
     """
 
     def __init__(
@@ -60,11 +97,18 @@ class RedisJobQueue(DurableQueueProtocol):
     def _job_key(self, job_id: str) -> str:
         return f"review:job:{job_id}"
 
+    def _arq_job_key(self, job_id: str) -> str:
+        return f"arq:job:{job_id}"
+
     def _delivery_key(self, delivery_id: str) -> str:
         return f"review:delivery:{delivery_id}"
 
     def _repo_running_key(self, repo_id: str) -> str:
         return f"review:repo_running:{repo_id}"
+
+    @property
+    def running_jobs_key(self) -> str:
+        return "review:jobs:running"
 
     @property
     def dead_letter_key(self) -> str:
@@ -93,6 +137,7 @@ class RedisJobQueue(DurableQueueProtocol):
 
     def _deserialize_job(self, data: dict[Any, Any]) -> ReviewJob:
         state_str = self._to_str(data.get(b"state") or data.get("state", "queued"))
+        lease_token = self._to_str(data.get(b"lease_token") or data.get("lease_token")) or None
         return ReviewJob(
             job_id=self._to_str(data.get(b"job_id") or data.get("job_id")),
             delivery_id=self._to_str(data.get(b"delivery_id") or data.get("delivery_id")),
@@ -109,6 +154,7 @@ class RedisJobQueue(DurableQueueProtocol):
             created_at=self._to_float(data.get(b"created_at") or data.get("created_at")),
             updated_at=self._to_float(data.get(b"updated_at") or data.get("updated_at")),
             next_run_at=self._to_float(data.get(b"next_run_at") or data.get("next_run_at")),
+            lease_token=lease_token,
         )
 
     def enqueue(
@@ -121,11 +167,12 @@ class RedisJobQueue(DurableQueueProtocol):
         deadline_seconds: float = 60.0,
         now: float | None = None,
     ) -> ReviewJob:
-        """Enqueue a review job atomically with durable identity correlated to the delivery."""
+        """Enqueue a review job atomically with durable identity and real ARQ task serialization."""
         current_time = time.time() if now is None else now
         job_id = f"job-{delivery_id}"
         delivery_key = self._delivery_key(delivery_id)
         job_key = self._job_key(job_id)
+        arq_job_key = self._arq_job_key(job_id)
 
         # Idempotency check: if delivery already exists, return existing job
         existing_job_id = self.client.get(delivery_key)
@@ -169,11 +216,21 @@ class RedisJobQueue(DurableQueueProtocol):
             "lease_expires_at": "0.0",
         }
 
-        # Pipeline atomic write: delivery index, job hash, and ARQ queue scheduling
+        # Real ARQ 0.28.0 job serialization for review_job_task
+        score_ms = int(current_time * 1000)
+        arq_payload = serialize_job(
+            function_name="review_job_task",
+            args=(job_id,),
+            kwargs={},
+            job_try=None,
+            enqueue_time_ms=score_ms,
+        )
+
+        # Pipeline atomic write: delivery index, job hash, real ARQ job, and ARQ queue scheduling
         pipe = self.client.pipeline(transaction=True)
         pipe.set(delivery_key, job_id)
         pipe.hset(job_key, mapping=job_data)
-        score_ms = int(current_time * 1000)
+        pipe.set(arq_job_key, arq_payload)
         pipe.zadd(self.queue_name, {job_id: score_ms})
         pipe.execute()
 
@@ -228,7 +285,12 @@ class RedisJobQueue(DurableQueueProtocol):
                     continue
 
             # Atomically attempt to lease this candidate
-            claimed, _ = self._attempt_claim(cand_job, current_time)
+            claimed, _ = self._attempt_claim(
+                cand_job,
+                current_time,
+                max_concurrency_per_repo=effective_cap,
+                from_queue=True,
+            )
             if claimed is not None:
                 return claimed
 
@@ -238,20 +300,54 @@ class RedisJobQueue(DurableQueueProtocol):
         self,
         job: ReviewJob,
         now: float,
+        *,
+        max_concurrency_per_repo: int | None = None,
+        from_queue: bool = True,
     ) -> tuple[ReviewJob | None, str | None]:
-        """Atomically pop from arq:queue, transition to RUNNING, and issue lease token."""
+        """Atomically check capacity, pop from arq:queue if needed, and claim lease."""
         job_key = self._job_key(job.job_id)
         running_key = self._repo_running_key(job.repository_id)
-
-        # Atomic removal from scheduling queue to guarantee single claim
-        removed = self.client.zrem(self.queue_name, job.job_id)
-        if not removed:
-            return None, "already_leased"
-
-        new_attempt = job.attempt_count + 1
+        queue_key = self.queue_name if from_queue else ""
+        cap_val = max_concurrency_per_repo if max_concurrency_per_repo is not None else -1
         lease_token = str(uuid.uuid4())
         lease_expires_at = now + job.deadline_seconds
 
+        # Attempt atomic Lua script execution if supported
+        if hasattr(self.client, "eval"):
+            try:
+                res = self.client.eval(
+                    CLAIM_JOB_LUA,
+                    4,
+                    running_key,
+                    self.running_jobs_key,
+                    job_key,
+                    queue_key,
+                    job.job_id,
+                    str(cap_val),
+                    str(now),
+                    lease_token,
+                    str(lease_expires_at),
+                )
+                res_str = self._to_str(res)
+                if res_str != "ok":
+                    return None, res_str
+                claimed_job = self.get_job(job.job_id)
+                return claimed_job, lease_token
+            except Exception:
+                pass  # Fall through to transactional path if eval unsupported
+
+        # Transactional fallback
+        if cap_val > 0:
+            current_count = self.client.scard(running_key)
+            if current_count >= cap_val:
+                return None, "repo_at_capacity"
+
+        if from_queue:
+            removed = self.client.zrem(self.queue_name, job.job_id)
+            if not removed:
+                return None, "already_leased"
+
+        new_attempt = job.attempt_count + 1
         pipe = self.client.pipeline(transaction=True)
         pipe.hset(
             job_key,
@@ -264,6 +360,7 @@ class RedisJobQueue(DurableQueueProtocol):
             },
         )
         pipe.sadd(running_key, job.job_id)
+        pipe.sadd(self.running_jobs_key, job.job_id)
         pipe.execute()
 
         claimed_job = self.get_job(job.job_id)
@@ -296,13 +393,13 @@ class RedisJobQueue(DurableQueueProtocol):
             )
         )
 
-        if effective_cap is not None:
-            running_key = self._repo_running_key(job.repository_id)
-            running_count = self.client.scard(running_key)
-            if running_count >= effective_cap:
-                return None, "repo_at_capacity"
-
-        return self._attempt_claim(job, current_time)
+        # In ARQ push model, ARQ worker pops the job; we claim logical ownership and slot
+        return self._attempt_claim(
+            job,
+            current_time,
+            max_concurrency_per_repo=effective_cap,
+            from_queue=False,
+        )
 
     def mark_completed(
         self,
@@ -336,6 +433,7 @@ class RedisJobQueue(DurableQueueProtocol):
             },
         )
         pipe.srem(running_key, job_id)
+        pipe.srem(self.running_jobs_key, job_id)
         pipe.zrem(self.queue_name, job_id)
         pipe.execute()
 
@@ -370,6 +468,7 @@ class RedisJobQueue(DurableQueueProtocol):
 
         pipe = self.client.pipeline(transaction=True)
         pipe.srem(running_key, job_id)
+        pipe.srem(self.running_jobs_key, job_id)
 
         if job.attempt_count >= job.max_retries:
             next_state = JobState.DEAD_LETTER
@@ -413,6 +512,8 @@ class RedisJobQueue(DurableQueueProtocol):
         job_id: str,
         reason: str = "",
         now: float | None = None,
+        *,
+        lease_token: str | None = None,
     ) -> ReviewJob:
         """Cancel a job, recording reason, removing from queue, and signaling ARQ abort."""
         current_time = time.time() if now is None else now
@@ -420,6 +521,12 @@ class RedisJobQueue(DurableQueueProtocol):
         data = self.client.hgetall(job_key)
         if not data:
             raise KeyError(f"Job {job_id} not found")
+
+        # Stale worker protection if token passed
+        if lease_token is not None:
+            stored_token = self._to_str(data.get(b"lease_token") or data.get("lease_token"))
+            if stored_token and stored_token != lease_token:
+                raise StaleLeaseError(f"Stale lease mutation rejected for job {job_id}")
 
         job = self._deserialize_job(data)
         running_key = self._repo_running_key(job.repository_id)
@@ -434,6 +541,7 @@ class RedisJobQueue(DurableQueueProtocol):
             },
         )
         pipe.srem(running_key, job_id)
+        pipe.srem(self.running_jobs_key, job_id)
         pipe.zrem(self.queue_name, job_id)
         # Signal ARQ abort set as operational optimization
         pipe.zadd(abort_jobs_ss, {job_id: int(current_time * 1000)})
@@ -460,34 +568,36 @@ class RedisJobQueue(DurableQueueProtocol):
         return json.loads(self._to_str(payload_val))
 
     def recover_zombie_jobs(self, now: float | None = None) -> list[ReviewJob]:
-        """Recover RUNNING jobs whose leases expired without completion (worker crash/partition)."""
+        """Recover RUNNING jobs whose leases expired without completion using the indexed running set."""
         current_time = time.time() if now is None else now
         recovered: list[ReviewJob] = []
 
-        # Find delivery keys to locate active jobs
-        delivery_keys = self.client.keys("review:delivery:*")
-        for d_key in delivery_keys:
-            job_id_val = self.client.get(d_key)
-            if not job_id_val:
-                continue
-            job_id = self._to_str(job_id_val)
+        # Use indexed set review:jobs:running (O(K) where K is running jobs, avoiding full keyspace scan)
+        running_job_ids = self.client.smembers(self.running_jobs_key)
+        for raw_job_id in running_job_ids:
+            job_id = self._to_str(raw_job_id)
             job_key = self._job_key(job_id)
             data = self.client.hgetall(job_key)
             if not data:
+                self.client.srem(self.running_jobs_key, job_id)
                 continue
 
             state_str = self._to_str(data.get(b"state") or data.get("state"))
             if state_str != JobState.RUNNING.value:
+                self.client.srem(self.running_jobs_key, job_id)
                 continue
 
             lease_expires_at = self._to_float(data.get(b"lease_expires_at") or data.get("lease_expires_at"))
             if current_time > lease_expires_at:
                 job = self._deserialize_job(data)
                 running_key = self._repo_running_key(job.repository_id)
-                self.client.srem(running_key, job.job_id)
+
+                pipe = self.client.pipeline(transaction=True)
+                pipe.srem(running_key, job.job_id)
+                pipe.srem(self.running_jobs_key, job.job_id)
 
                 if job.attempt_count >= job.max_retries:
-                    self.client.hset(
+                    pipe.hset(
                         job_key,
                         mapping={
                             "state": JobState.DEAD_LETTER.value,
@@ -495,11 +605,11 @@ class RedisJobQueue(DurableQueueProtocol):
                             "updated_at": str(current_time),
                         },
                     )
-                    self.client.sadd(self.dead_letter_key, job.job_id)
+                    pipe.sadd(self.dead_letter_key, job.job_id)
                 else:
                     delay = job.backoff_base_seconds * (2 ** (job.attempt_count - 1))
                     next_run = current_time + delay
-                    self.client.hset(
+                    pipe.hset(
                         job_key,
                         mapping={
                             "state": JobState.QUEUED.value,
@@ -508,10 +618,45 @@ class RedisJobQueue(DurableQueueProtocol):
                             "updated_at": str(current_time),
                         },
                     )
-                    self.client.zadd(self.queue_name, {job.job_id: int(next_run * 1000)})
+                    pipe.zadd(self.queue_name, {job.job_id: int(next_run * 1000)})
 
+                pipe.execute()
                 updated = self.get_job(job.job_id)
                 if updated:
                     recovered.append(updated)
 
         return recovered
+
+
+async def review_job_task(ctx: dict[str, Any], job_id: str) -> dict[str, Any]:
+    """Real ARQ worker task function executing a claimed review job with lease token propagation.
+
+    ARQ Worker Invocation Flow:
+    1. ARQ pops job_id from arq:queue.
+    2. Invokes review_job_task(ctx, job_id).
+    3. queue.claim_job(job_id) atomically checks repo concurrency and claims lease_token.
+    4. If repo at capacity: raises arq.worker.Retry(defer=1.0) so ARQ yields to other jobs.
+    5. worker.process_claimed_job(...) executes review, propagating lease_token to mark_completed/failed.
+    """
+    queue: DurableQueueProtocol = ctx["queue"]
+    worker: Any = ctx["worker"]
+    current_time = time.time()
+
+    if hasattr(queue, "claim_job"):
+        job, lease_token = queue.claim_job(job_id, now=current_time)
+    else:
+        job = queue.get_job(job_id)
+        lease_token = getattr(job, "lease_token", None) if job else None
+
+    if job is None:
+        if lease_token == "repo_at_capacity":
+            from arq.worker import Retry
+            raise Retry(defer=1.0)
+        return {"status": "skipped", "reason": lease_token, "job_id": job_id}
+
+    state = await worker.process_claimed_job(job, lease_token=lease_token, now=current_time)
+    return {
+        "status": "completed" if not state.is_cancelled else "cancelled",
+        "job_id": job.job_id,
+        "terminal_status": state.terminal_status,
+    }

@@ -12,25 +12,86 @@ Verifies:
 from __future__ import annotations
 
 from collections.abc import Mapping
+import sqlite3
 import time
 from typing import Any
 import unittest
 import uuid
 
+from arq.jobs import deserialize_job
 import redis
 
-from pr_review_agent.adapters.redis_queue import RedisJobQueue, StaleLeaseError
+from pr_review_agent.adapters.redis_queue import (
+    RedisJobQueue,
+    StaleLeaseError,
+    review_job_task,
+)
+from pr_review_agent.github_output import FakeGitHubClient
 from pr_review_agent.intake import ReviewSnapshot
 from pr_review_agent.orchestration import (
+    CandidateFinding,
     DurableQueueProtocol,
     JobState,
     ReviewJob,
+    SpecialistInput,
+    SpecialistOutput,
+    SpecialistType,
 )
 from pr_review_agent.service_config import ServiceConfig, load_service_config
+from pr_review_agent.worker import AutonomousReviewWorker
 from tests.test_queue_and_checkpoint_contracts import (
     DurableQueueContractTestSuite,
     sample_snapshot,
 )
+
+
+def _make_dummy_service_config() -> ServiceConfig:
+    return ServiceConfig(
+        github_token="ghp_dummytoken123456789012345678901234567890",
+        webhook_secret=b"dummy-webhook-secret-32-bytes-ok!",
+        model_provider="openai",
+        model_name="gpt-4o",
+        database_path=":memory:",
+        host="127.0.0.1",
+        port=8000,
+        authorized_repositories=("octocat/hello-world", "owner/repo"),
+        authorized_tenant="octocat",
+        publish_enabled=False,
+        api_key="sk-mock-key-12345678901234567890",
+    )
+
+
+def _make_mock_specialist(findings: list[CandidateFinding] | None = None, should_fail: bool = False):
+    def handler(spec_input: SpecialistInput) -> SpecialistOutput:
+        if should_fail:
+            raise RuntimeError("Simulated specialist failure")
+        return SpecialistOutput(
+            specialist_type=spec_input.specialist_type,
+            correlation_id=spec_input.correlation_id,
+            status="completed",
+            findings=tuple(findings or []),
+            execution_duration=0.01,
+        )
+
+    return handler
+
+
+def _create_test_worker(queue: DurableQueueProtocol, should_fail: bool = False) -> AutonomousReviewWorker:
+    cfg = _make_dummy_service_config()
+    conn = sqlite3.connect(":memory:")
+    handlers = {
+        SpecialistType.SECURITY: _make_mock_specialist(should_fail=should_fail),
+        SpecialistType.QUALITY: _make_mock_specialist(should_fail=should_fail),
+        SpecialistType.TESTS: _make_mock_specialist(should_fail=should_fail),
+        SpecialistType.DOCUMENTATION: _make_mock_specialist(should_fail=should_fail),
+    }
+    return AutonomousReviewWorker(
+        cfg,
+        connection=conn,
+        github_client=FakeGitHubClient(),
+        specialist_handlers=handlers,
+        queue=queue,
+    )
 
 
 class InMemoryRedisClient:
@@ -170,6 +231,48 @@ class InMemoryRedisClient:
         self._ensure_open()
         return len(self._sets.get(str(name), set()))
 
+    def smembers(self, name: str) -> set[bytes]:
+        self._ensure_open()
+        s = self._sets.get(str(name), set())
+        return {x.encode("utf-8") if isinstance(x, str) else x for x in s}
+
+    def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
+        self._ensure_open()
+        keys = list(keys_and_args[:numkeys])
+        args = list(keys_and_args[numkeys:])
+        if "SCARD" in script or "CLAIM_JOB_LUA" in script:
+            running_key = str(keys[0])
+            running_jobs_key = str(keys[1])
+            job_key = str(keys[2])
+            queue_key = str(keys[3])
+            job_id = str(args[0])
+            cap = int(args[1]) if int(args[1]) > 0 else None
+            now = float(args[2])
+            lease_token = str(args[3])
+            lease_expires_at = str(args[4])
+
+            if cap is not None and self.scard(running_key) >= cap:
+                return b"repo_at_capacity"
+            if queue_key != "":
+                removed = self.zrem(queue_key, job_id)
+                if removed == 0:
+                    return b"already_leased"
+            self.sadd(running_key, job_id)
+            self.sadd(running_jobs_key, job_id)
+            curr_attempts = int(self.hget(job_key, "attempt_count") or b"0")
+            self.hset(
+                job_key,
+                mapping={
+                    "state": "running",
+                    "attempt_count": str(curr_attempts + 1),
+                    "lease_token": lease_token,
+                    "lease_expires_at": lease_expires_at,
+                    "updated_at": str(now),
+                },
+            )
+            return b"ok"
+        raise NotImplementedError("Arbitrary lua eval not supported in InMemoryRedisClient")
+
     def keys(self, pattern: str = "*") -> list[str]:
         self._ensure_open()
         import fnmatch
@@ -215,12 +318,161 @@ class RedisDurableQueueContractTests(DurableQueueContractTestSuite, unittest.Tes
         return self.queue
 
 
-class RedisSpecificAdapterTests(unittest.TestCase):
+class RedisSpecificAdapterTests(unittest.IsolatedAsyncioTestCase):
     """Verify Redis-specific semantics: lease tokens, stale worker rejection, concurrency, failure modes."""
 
     def setUp(self) -> None:
         self.client = InMemoryRedisClient()
         self.queue = RedisJobQueue(client=self.client)  # type: ignore[arg-type]
+
+    async def test_actual_arq_job_model_and_worker_task_execution_path(self) -> None:
+        """Verify RedisJobQueue produces genuine ARQ 0.28.0 serialized jobs executed via review_job_task."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/hello-world")
+        job = self.queue.enqueue(snapshot, "del-arq-exec", now=now)
+
+        # 1. Verify ARQ job exists in Redis under arq:job:{job_id}
+        arq_job_raw = self.client.get(f"arq:job:{job.job_id}")
+        self.assertIsNotNone(arq_job_raw)
+
+        # 2. Verify deserialization with official arq.jobs.deserialize_job
+        arq_job_def = deserialize_job(arq_job_raw)
+        self.assertEqual("review_job_task", arq_job_def.function)
+        self.assertEqual((job.job_id,), arq_job_def.args)
+        self.assertIsNotNone(arq_job_def.enqueue_time)
+
+        # 3. Execute via real ARQ worker task function
+        worker = _create_test_worker(self.queue)
+        ctx = {"queue": self.queue, "worker": worker}
+        task_result = await review_job_task(ctx, job.job_id)
+
+        self.assertEqual("completed", task_result["status"])
+        self.assertEqual(job.job_id, task_result["job_id"])
+
+        # 4. Verify terminal status in queue
+        completed_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(completed_job)
+        self.assertEqual(JobState.COMPLETED, completed_job.state)
+
+        # 5. Repo slot is released
+        running_key = f"review:repo_running:{job.repository_id}"
+        self.assertEqual(0, self.client.scard(running_key))
+        self.assertEqual(0, self.client.scard(self.queue.running_jobs_key))
+
+    async def test_stale_worker_rejection_in_real_worker_path_on_completion(self) -> None:
+        """Worker A's completion is rejected when lease expires and Worker B claims the job."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/hello-world")
+        job = self.queue.enqueue(snapshot, "del-stale-worker-complete", deadline_seconds=10.0, now=now)
+
+        worker_a = _create_test_worker(self.queue)
+        worker_b = _create_test_worker(self.queue)
+
+        # Worker A claims the job with token A
+        job_a, token_a = self.queue.claim_job(job.job_id, now=now)
+        self.assertIsNotNone(job_a)
+        self.assertIsNotNone(token_a)
+
+        # Time elapses; lease expires; zombie recovery returns job to QUEUED or Worker B claims
+        self.queue.recover_zombie_jobs(now=now + 20.0)
+        job_b, token_b = self.queue.claim_job(job.job_id, now=now + 21.0)
+        self.assertIsNotNone(job_b)
+        self.assertIsNotNone(token_b)
+        self.assertNotEqual(token_a, token_b)
+
+        # Worker A finishes its slow review and attempts terminal completion with token A -> must fail!
+        with self.assertRaises(StaleLeaseError):
+            await worker_a.process_claimed_job(job_a, lease_token=token_a, now=now + 25.0)
+
+        # Job in queue must NOT have been marked completed by Worker A
+        mid_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(mid_job)
+        self.assertEqual(JobState.RUNNING, mid_job.state)
+
+        # Worker B completes with token B -> succeeds
+        await worker_b.process_claimed_job(job_b, lease_token=token_b, now=now + 26.0)
+        final_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(final_job)
+        self.assertEqual(JobState.COMPLETED, final_job.state)
+
+    async def test_stale_worker_rejection_in_real_worker_path_on_failure(self) -> None:
+        """Worker A's failure mutation is rejected when lease expires and Worker B claims the job."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/hello-world")
+        job = self.queue.enqueue(snapshot, "del-stale-worker-fail", deadline_seconds=10.0, now=now)
+
+        failing_worker_a = _create_test_worker(self.queue, should_fail=True)
+        worker_b = _create_test_worker(self.queue)
+
+        # Worker A claims the job with token A
+        job_a, token_a = self.queue.claim_job(job.job_id, now=now)
+        self.assertIsNotNone(job_a)
+        self.assertIsNotNone(token_a)
+
+        # Worker A hangs, lease expires, Worker B claims with token B
+        self.queue.recover_zombie_jobs(now=now + 20.0)
+        job_b, token_b = self.queue.claim_job(job.job_id, now=now + 21.0)
+        self.assertIsNotNone(job_b)
+        self.assertIsNotNone(token_b)
+        self.assertNotEqual(token_a, token_b)
+
+        # Worker A wakes up and its failure is executed
+        with self.assertRaises(RuntimeError):
+            await failing_worker_a.process_claimed_job(job_a, lease_token=token_a, now=now + 25.0)
+
+        # Job in queue must NOT have been moved to retry/backoff or dead-letter by Worker A
+        mid_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(mid_job)
+        self.assertEqual(JobState.RUNNING, mid_job.state)
+
+        # Worker B successfully finishes
+        await worker_b.process_claimed_job(job_b, lease_token=token_b, now=now + 26.0)
+        final_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(final_job)
+        self.assertEqual(JobState.COMPLETED, final_job.state)
+
+    def test_atomic_concurrency_eval_lua_script(self) -> None:
+        """Lua script atomically checks capacity and admits at most max_concurrency_per_repo."""
+        now = 1000.0
+        job1 = self.queue.enqueue(sample_snapshot(repo_id="lua-repo"), "del-lua-1", now=now)
+        job2 = self.queue.enqueue(sample_snapshot(repo_id="lua-repo"), "del-lua-2", now=now)
+
+        claimed1, token1 = self.queue.claim_job(job1.job_id, now=now, max_concurrency_per_repo=1)
+        self.assertIsNotNone(claimed1)
+        self.assertIsNotNone(token1)
+
+        claimed2, reason2 = self.queue.claim_job(job2.job_id, now=now, max_concurrency_per_repo=1)
+        self.assertIsNone(claimed2)
+        self.assertEqual("repo_at_capacity", reason2)
+
+        # Exactly 1 slot in running set
+        self.assertEqual(1, self.client.scard("review:repo_running:lua-repo"))
+
+        # Complete job 1
+        self.queue.mark_completed(job1.job_id, now=now + 1.0, lease_token=token1)
+        self.assertEqual(0, self.client.scard("review:repo_running:lua-repo"))
+
+        # Now job 2 can be claimed
+        claimed2, token2 = self.queue.claim_job(job2.job_id, now=now + 2.0, max_concurrency_per_repo=1)
+        self.assertIsNotNone(claimed2)
+        self.assertIsNotNone(token2)
+        self.assertEqual(1, self.client.scard("review:repo_running:lua-repo"))
+
+    def test_set_based_zombie_recovery_tracking(self) -> None:
+        """Indexed review:jobs:running tracks running jobs without scanning keyspace."""
+        now = 1000.0
+        job = self.queue.enqueue(sample_snapshot(), "del-set-zombie", deadline_seconds=5.0, now=now)
+        self.assertEqual(0, self.client.scard(self.queue.running_jobs_key))
+
+        leased = self.queue.lease_next_job(now=now)
+        self.assertIsNotNone(leased)
+        self.assertEqual(1, self.client.scard(self.queue.running_jobs_key))
+        self.assertIn(job.job_id.encode("utf-8"), self.client.smembers(self.queue.running_jobs_key))
+
+        # Expire and recover
+        recovered = self.queue.recover_zombie_jobs(now=now + 10.0)
+        self.assertEqual(1, len(recovered))
+        self.assertEqual(0, self.client.scard(self.queue.running_jobs_key))
 
     def test_lease_token_issuance_and_stale_worker_rejection(self) -> None:
         """Worker A's mutation must be rejected if its lease token is stale (reclaimed by Worker B)."""
