@@ -1,0 +1,13 @@
+{
+  "task": "redis-workflow-checkpoint-adapter",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "96751297-633c-4acf-8347-e9f511ceb702",
+  "human": "Ayush Kant",
+  "reason": "Approve W1-04 Redis workflow checkpoint adapter implementation and verification",
+  "observed_at": "2026-09-16T23:02:38.598Z",
+  "source_hash": "a0f53ba47da02014c9c567bdc3d20257ad437f60965e010b553cbf92a8cc8c3a",
+  "config_hash": "0b45a695eadf2f27753a16193ef2bb941e3816332ae54a781901cdecd12b14db",
+  "reviewed_proofs": "0be38fb18b8a91ac5bf0f223b83b488b12c21ada5843e30c8ea9b51e3d7c39dc",
+  "hash": "1c132d9d82b8761a06f05fcac6b0b73b2c26475a63ab74406546356e28cf963e"
+}

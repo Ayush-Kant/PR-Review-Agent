@@ -124,6 +124,7 @@ class AutonomousReviewWorker:
         publisher: GitHubReviewPublisher | None = None,
         policy_engine: ReviewPolicyEngine | None = None,
         aggregator: FindingAggregator | None = None,
+        checkpointer: Any | None = None,
     ) -> None:
         self.config = config
         self._owns_connection = connection is None
@@ -148,6 +149,11 @@ class AutonomousReviewWorker:
             self.github_client,
         )
 
+        self.checkpointer = checkpointer
+        if self.checkpointer is None and getattr(config, "checkpoint_backend", "none") == "redis" and getattr(config, "redis_url", ""):
+            from pr_review_agent.adapters.redis_checkpoint import RedisCheckpointSaver
+            self.checkpointer = RedisCheckpointSaver(redis_url=config.redis_url)
+
         if orchestrator is not None:
             self.orchestrator = orchestrator
         else:
@@ -168,6 +174,7 @@ class AutonomousReviewWorker:
             self.orchestrator = ReviewOrchestrator(
                 specialist_handlers=handlers,
                 default_instructions=default_instructions,
+                checkpointer=self.checkpointer,
             )
 
         self.policy_engine = policy_engine or ReviewPolicyEngine(policy_version="v1")

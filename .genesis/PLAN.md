@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-16T20:36:01.769Z
+- plan approval: Ayush Kant at 2026-09-16T22:54:31.134Z
 
 ## Tasks
 
@@ -142,5 +142,13 @@
 - requirements: FR-03
 - scope: not bounded
 - gates: test: python -m pytest tests/test_redis_queue_adapter.py tests/test_queue_and_checkpoint_contracts.py, independent-review: pass
+- next: Run the task pre-flight.
+
+### redis-workflow-checkpoint-adapter — Implement Redis workflow checkpoint adapter satisfying LangGraph checkpointer contract
+
+- state/risk: done / medium
+- requirements: FR-03
+- scope: not bounded
+- gates: test: python -m pytest tests/test_redis_checkpoint_adapter.py tests/test_queue_and_checkpoint_contracts.py, independent-review: pass
 - next: Run the task pre-flight.
 

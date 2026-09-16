@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "24d70e569d620fb3662cceaa5a9676b1870ed069",
-  "sourceHash": "880b3966783bea95400619c45b5be33b803a472dc160f2dab4e263bd03c0ecb8",
+  "revision": "df1e294dad03f69dfe278ea0294d857366a7dc93",
+  "sourceHash": "13af23d7c285d46f4cde937008213643a460c36d76b0d8d797ece5ec82bd5a28",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -27,7 +27,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "053e961e2697762cc41a4e563a0057f7d7fc299b0bb7561c639bd8462a6b625c"
+      "contentHash": "6aef4b76f8453a42da08bd82dd441e9aea247947b25c452c3387ad5455f2f825"
     },
     {
       "id": "file:pr_review_agent/adapters/github.py",
@@ -48,6 +48,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "d8dbdff275c5a9a2df189fdeae42391e877a773b7f6ad433d7556a85244dbbd1"
+    },
+    {
+      "id": "file:pr_review_agent/adapters/redis_checkpoint.py",
+      "type": "file",
+      "label": "pr_review_agent/adapters/redis_checkpoint.py",
+      "path": "pr_review_agent/adapters/redis_checkpoint.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "fb887317dd97d82dc3f0e2f70eec001c38472ea080c6b568d5382f3d566ae512"
     },
     {
       "id": "file:pr_review_agent/adapters/redis_queue.py",
@@ -127,7 +137,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "27f381b4a61e191dfb3a75149bca932ad30bb57b95194dbcb898d5ba09b184b9"
+      "contentHash": "ecca550b5fdac65810f1be8c2aeb2cb2f3b809440acf305a288fcc379cf67cad"
     },
     {
       "id": "file:pr_review_agent/policy.py",
@@ -177,7 +187,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "b06d3596a8cd2931ddffcef7c0782d25f8719ca19cfb9499ab16ca05a57c8b3c"
+      "contentHash": "4b568efa41bf23530c3ae7611ec84650793bb046ca5a12441d6c6c7c756808a8"
     },
     {
       "id": "file:pr_review_agent/worker.py",
@@ -187,7 +197,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "2dd60c8ba4a0ea36a831984dc64ce676be4efa7bc8649fc20f34c66e76a1ff61"
+      "contentHash": "716d993cdb812e14c05fc4454f187f57173719d35b5a7fcad13b6532af7fc88c"
     },
     {
       "id": "file:scratch/analyze_genesis.py",
@@ -348,6 +358,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "e1524b86193b3b94524b2154e9e2e0fd43904146a2a03abff2abe82a0c7446ab"
+    },
+    {
+      "id": "file:tests/test_redis_checkpoint_adapter.py",
+      "type": "file",
+      "label": "tests/test_redis_checkpoint_adapter.py",
+      "path": "tests/test_redis_checkpoint_adapter.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "ca19ae5631fc42fc0ecb94bbad0c1bdc51a6a1b304244db62df338e7ad22438d"
     },
     {
       "id": "file:tests/test_redis_queue_adapter.py",

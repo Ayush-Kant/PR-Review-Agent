@@ -765,9 +765,13 @@ class ReviewOrchestrator:
         app = self._build_graph()
         if self.checkpointer is not None:
             config = {"configurable": {"thread_id": job.job_id}}
-            final_dict: dict = await app.ainvoke(initial_state, config=config)
+            existing_state = await app.aget_state(config)
+            if existing_state and (existing_state.next or existing_state.values):
+                final_dict = await app.ainvoke(None, config=config)
+            else:
+                final_dict = await app.ainvoke(initial_state, config=config)
         else:
-            final_dict: dict = await app.ainvoke(initial_state)
+            final_dict = await app.ainvoke(initial_state)
 
         return ReviewLifecycleState(
             run_id=final_dict["run_id"],

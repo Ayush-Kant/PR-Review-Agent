@@ -1,0 +1,30 @@
+{
+  "task": "redis-workflow-checkpoint-adapter",
+  "gate": "test",
+  "kind": "command",
+  "attempt": "99d3022c-edbd-456e-9d0e-57900870d750",
+  "command": "python -m pytest tests/test_redis_checkpoint_adapter.py tests/test_queue_and_checkpoint_contracts.py",
+  "started_at": "2026-09-16T22:59:54.447Z",
+  "observed_at": "2026-09-16T23:00:22.013Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 34 items\r\n\r\ntests\\test_redis_checkpoint_adapter.py .............s...                 [ 50%]\r\ntests\\test_queue_and_checkpoint_contracts.py .................           [100%]\r\n\r\n======================== 33 passed, 1 skipped in 8.93s ========================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "df1e294dad03f69dfe278ea0294d857366a7dc93",
+    "dirty": true
+  },
+  "source_hash": "a0f53ba47da02014c9c567bdc3d20257ad437f60965e010b553cbf92a8cc8c3a",
+  "before_hash": "a0f53ba47da02014c9c567bdc3d20257ad437f60965e010b553cbf92a8cc8c3a",
+  "config_hash": "0b45a695eadf2f27753a16193ef2bb941e3816332ae54a781901cdecd12b14db",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "dd46cc240aa7bfa3b3e2ef1415fe8b2eb875cb7eb13bf439ac2d5cad0214a2b0"
+}

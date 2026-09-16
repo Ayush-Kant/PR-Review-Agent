@@ -5,6 +5,7 @@ digraph genesis {
   "file:pr_review_agent/adapters/__init__.py" [label="pr_review_agent/adapters/__init__.py",class="file"];
   "file:pr_review_agent/adapters/github.py" [label="pr_review_agent/adapters/github.py",class="file"];
   "file:pr_review_agent/adapters/llm.py" [label="pr_review_agent/adapters/llm.py",class="file"];
+  "file:pr_review_agent/adapters/redis_checkpoint.py" [label="pr_review_agent/adapters/redis_checkpoint.py",class="file"];
   "file:pr_review_agent/adapters/redis_queue.py" [label="pr_review_agent/adapters/redis_queue.py",class="file"];
   "file:pr_review_agent/adapters/webhook_ingress.py" [label="pr_review_agent/adapters/webhook_ingress.py",class="file"];
   "file:pr_review_agent/cost_controls.py" [label="pr_review_agent/cost_controls.py",class="file"];
@@ -35,6 +36,7 @@ digraph genesis {
   "file:tests/test_live_pr_validation.py" [label="tests/test_live_pr_validation.py",class="file"];
   "file:tests/test_network_adapters.py" [label="tests/test_network_adapters.py",class="file"];
   "file:tests/test_queue_and_checkpoint_contracts.py" [label="tests/test_queue_and_checkpoint_contracts.py",class="file"];
+  "file:tests/test_redis_checkpoint_adapter.py" [label="tests/test_redis_checkpoint_adapter.py",class="file"];
   "file:tests/test_redis_queue_adapter.py" [label="tests/test_redis_queue_adapter.py",class="file"];
   "file:tests/test_retrieval_and_findings.py" [label="tests/test_retrieval_and_findings.py",class="file"];
   "file:tests/test_review_orchestration.py" [label="tests/test_review_orchestration.py",class="file"];
