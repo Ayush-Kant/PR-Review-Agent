@@ -489,7 +489,7 @@ class RedisJobQueue(DurableQueueProtocol):
         # Stale worker protection: verify lease token if provided
         if lease_token is not None:
             stored_token = self._to_str(data.get(b"lease_token") or data.get("lease_token"))
-            if stored_token and stored_token != lease_token:
+            if stored_token != lease_token:
                 raise StaleLeaseError(f"Stale lease mutation rejected for job {job_id}")
 
         job = self._deserialize_job(data)
@@ -531,7 +531,7 @@ class RedisJobQueue(DurableQueueProtocol):
         # Stale worker protection: verify lease token if provided
         if lease_token is not None:
             stored_token = self._to_str(data.get(b"lease_token") or data.get("lease_token"))
-            if stored_token and stored_token != lease_token:
+            if stored_token != lease_token:
                 raise StaleLeaseError(f"Stale lease mutation rejected for job {job_id}")
 
         job = self._deserialize_job(data)
@@ -601,7 +601,7 @@ class RedisJobQueue(DurableQueueProtocol):
         # Stale worker protection if token passed
         if lease_token is not None:
             stored_token = self._to_str(data.get(b"lease_token") or data.get("lease_token"))
-            if stored_token and stored_token != lease_token:
+            if stored_token != lease_token:
                 raise StaleLeaseError(f"Stale lease mutation rejected for job {job_id}")
 
         job = self._deserialize_job(data)
@@ -614,6 +614,8 @@ class RedisJobQueue(DurableQueueProtocol):
                 "state": JobState.CANCELLED.value,
                 "last_error": reason or "Cancelled by operator",
                 "updated_at": str(current_time),
+                "lease_token": "",
+                "lease_expires_at": "0.0",
             },
         )
         pipe.srem(running_key, job_id)
@@ -679,6 +681,8 @@ class RedisJobQueue(DurableQueueProtocol):
                             "state": JobState.DEAD_LETTER.value,
                             "last_error": "Lease expired: worker heartbeat lost (max retries exhausted)",
                             "updated_at": str(current_time),
+                            "lease_token": "",
+                            "lease_expires_at": "0.0",
                         },
                     )
                     pipe.sadd(self.dead_letter_key, job.job_id)
@@ -692,6 +696,8 @@ class RedisJobQueue(DurableQueueProtocol):
                             "last_error": "Lease expired: worker heartbeat lost, rescheduled",
                             "next_run_at": str(next_run),
                             "updated_at": str(current_time),
+                            "lease_token": "",
+                            "lease_expires_at": "0.0",
                         },
                     )
                     pipe.zadd(self.queue_name, {job.job_id: int(next_run * 1000)})

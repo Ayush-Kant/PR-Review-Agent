@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "845e883aa90f67b6088ba05a7711a9f8eb0755ec",
-  "sourceHash": "fe49d4299fbc2a9858d4f37a01526a96ad7901e1d54093eeb8cd81178759cdf2",
+  "revision": "24d70e569d620fb3662cceaa5a9676b1870ed069",
+  "sourceHash": "880b3966783bea95400619c45b5be33b803a472dc160f2dab4e263bd03c0ecb8",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -57,7 +57,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "f1d8fb65ba6bd4bad0e31bf0f6dea54df5a9556668a8ae76352400a1bdd0b58c"
+      "contentHash": "5cf80443a9881b019ab7ed280824332a67309903ed3974281759ea541c41f9c0"
     },
     {
       "id": "file:pr_review_agent/adapters/webhook_ingress.py",
@@ -187,7 +187,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "17aa72e14f41af09845602c1ca1c2f3277241b41483d3ce54fbcabc45fc25cf9"
+      "contentHash": "2dd60c8ba4a0ea36a831984dc64ce676be4efa7bc8649fc20f34c66e76a1ff61"
     },
     {
       "id": "file:scratch/analyze_genesis.py",
@@ -357,7 +357,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "c3706a11855115b367d4996115a044176df3e4592b7a85a5c97941d82cb10b91"
+      "contentHash": "809a6cb1e6e2af62620ed19bc07df4552c589e7b38b425b828ee75505f946b44"
     },
     {
       "id": "file:tests/test_retrieval_and_findings.py",

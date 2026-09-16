@@ -575,6 +575,11 @@ class WorkerSettings:
        allow_abort_jobs = True enables ARQ's background monitoring of abort_jobs_ss (arq:abort).
        Logical JobState.CANCELLED in review:job:{job_id} remains authoritative; ARQ task abort
        serves as an operational optimization to terminate active compute immediately.
+    4. Transport Timing & Limit Derivation (Concern 5 & 8):
+       - job_timeout = 60.0s: derived from ReviewJob.deadline_seconds (60.0s), aligning ARQ's
+         task execution timeout and in-progress TTL (60.1s) with application lease expiration.
+       - max_tries = 5: derived from ReviewJob.max_retries (3) + 1 initial try + 1 crash recovery
+         tolerance, preventing ARQ transport from prematurely truncating application retries.
     """
 
     functions = [review_job_task]
@@ -586,12 +591,10 @@ class WorkerSettings:
     # Concern 2: Enable ARQ operational cancellation listener on abort_jobs_ss
     allow_abort_jobs = True
 
-    # Concern 1: Allow review_job_task to signal controlled deferral via Retry(defer=...)
-    # while preventing ARQ from imposing an unintended generic exception retry policy.
-    # Set max_tries to a generous ceiling so ARQ transport never truncates application retries
-    # or pessimistic crash recovery.
+    # Concern 1 & 8: Align ARQ retry/timeout settings with ReviewJob authority
     retry_jobs = True
-    max_tries = 10
+    max_tries = 5
+    job_timeout = 60.0
 
 
 ReviewWorkerSettings = WorkerSettings

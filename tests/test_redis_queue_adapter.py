@@ -980,6 +980,174 @@ class RedisSpecificAdapterTests(unittest.IsolatedAsyncioTestCase):
         # Exactly one job hash
         self.assertEqual(b"queued", self.client.hget(f"review:job:{first_job_id}", "state"))
 
+    async def test_invariant_1_and_7_retry_authority_and_queue_cardinality(self) -> None:
+        """Invariant 1 & 7: One failed attempt creates exactly one future execution; queue cardinality is 1."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/cardinality-repo")
+        job = self.queue.enqueue(snapshot, "del-inv-1-7", max_retries=3, backoff_base_seconds=2.0, now=now)
+
+        failing_worker = _create_test_worker(self.queue, should_fail=True)
+        ctx = {"queue": self.queue, "worker": failing_worker, "score": int(now * 1000)}
+
+        from arq.worker import Retry
+        with self.assertRaises(Retry) as cm:
+            await review_job_task(ctx, job.job_id)
+
+        # Invariant 1: exactly 1 retry scheduled with application exponential backoff
+        self.assertAlmostEqual(2.0, cm.exception.defer_score / 1000, places=1)
+        updated = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(updated)
+        self.assertEqual(JobState.QUEUED, updated.state)
+        self.assertEqual(1, updated.attempt_count)
+
+        # Invariant 7: queue cardinality in arq:queue is strictly 1
+        self.assertEqual(1, self.client.zcard(self.queue.queue_name))
+        queue_members = self.client.zrange(self.queue.queue_name, 0, -1)
+        self.assertEqual([job.job_id.encode("utf-8")], queue_members)
+        # Verify arq:job is preserved for the next execution
+        self.assertIsNotNone(self.client.get(f"arq:job:{job.job_id}"))
+
+    async def test_invariant_2_no_retry_double_counting(self) -> None:
+        """Invariant 2: ReviewJob.attempt_count increments strictly once per attempt, never double-counted by ARQ."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/no-double-count")
+        job = self.queue.enqueue(snapshot, "del-inv-2", max_retries=3, backoff_base_seconds=1.0, now=now)
+        self.assertEqual(0, job.attempt_count)
+
+        failing_worker = _create_test_worker(self.queue, should_fail=True)
+
+        # Attempt 1
+        ctx1 = {"queue": self.queue, "worker": failing_worker, "score": int(now * 1000)}
+        from arq.worker import Retry
+        with self.assertRaises(Retry):
+            await review_job_task(ctx1, job.job_id)
+
+        job_after_try1 = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(job_after_try1)
+        # attempt_count must be exactly 1, not 2
+        self.assertEqual(1, job_after_try1.attempt_count)
+
+        # Attempt 2 (retried)
+        ctx2 = {"queue": self.queue, "worker": failing_worker, "score": int((now + 1.0) * 1000)}
+        with self.assertRaises(Retry):
+            await review_job_task(ctx2, job.job_id)
+
+        job_after_try2 = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(job_after_try2)
+        # attempt_count must be exactly 2, not 3 or 4
+        self.assertEqual(2, job_after_try2.attempt_count)
+
+    async def test_invariant_3_retry_exhaustion_dead_letter(self) -> None:
+        """Invariant 3: Reaching max_retries transitions to DEAD_LETTER; ARQ does not schedule another retry."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/exhaustion-repo")
+        job = self.queue.enqueue(snapshot, "del-inv-3", max_retries=1, backoff_base_seconds=1.0, now=now)
+
+        failing_worker = _create_test_worker(self.queue, should_fail=True)
+        ctx = {"queue": self.queue, "worker": failing_worker, "score": int(now * 1000)}
+
+        # Attempt 1 (and only attempt allowed since max_retries=1)
+        task_res = await review_job_task(ctx, job.job_id)
+
+        # ARQ task returns cleanly (not raising Retry)
+        self.assertEqual("dead_letter", task_res["status"])
+        dead_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(dead_job)
+        self.assertEqual(JobState.DEAD_LETTER, dead_job.state)
+        self.assertEqual(1, dead_job.attempt_count)
+        # Dead-lettered in dead_letter_key and removed from arq:queue
+        self.assertEqual(1, self.client.scard(self.queue.dead_letter_key))
+        self.assertEqual(0, self.client.zcard(self.queue.queue_name))
+
+    def test_invariant_4_and_5_crash_recovery_and_lease_arq_timing_relationship(self) -> None:
+        """Invariant 4 & 5: Crash recovery reclaims expired lease exactly once; stale worker rejected."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/crash-timing-repo")
+        job = self.queue.enqueue(snapshot, "del-inv-4-5", deadline_seconds=10.0, max_retries=3, now=now)
+
+        # Worker A claims the job with lease_token_A
+        job_a, token_a = self.queue.claim_job(job.job_id, now=now)
+        self.assertIsNotNone(job_a)
+        self.assertEqual(1, job_a.attempt_count)
+        self.assertEqual(JobState.RUNNING, job_a.state)
+        self.assertIsNotNone(token_a)
+
+        # Timing check: before deadline (now + 5.0), recovery must NOT reclaim the job
+        recovered_early = self.queue.recover_zombie_jobs(now=now + 5.0)
+        self.assertEqual(0, len(recovered_early))
+        self.assertEqual(JobState.RUNNING, self.queue.get_job(job.job_id).state)
+
+        # Worker A dies (process killed). Time advances past deadline (now + 11.0).
+        recovered = self.queue.recover_zombie_jobs(now=now + 11.0)
+        self.assertEqual(1, len(recovered))
+        self.assertEqual(JobState.QUEUED, recovered[0].state)
+        # attempt_count was NOT incremented by recover_zombie_jobs
+        self.assertEqual(1, recovered[0].attempt_count)
+
+        # Stale lease invalidation check: Worker A wakes up late and attempts mutation with token_a
+        with self.assertRaises(StaleLeaseError):
+            self.queue.mark_completed(job.job_id, now=now + 12.0, lease_token=token_a)
+        with self.assertRaises(StaleLeaseError):
+            self.queue.mark_failed(job.job_id, error="Late fail", now=now + 12.0, lease_token=token_a)
+
+        # Worker B claims the recovered job
+        job_b, token_b = self.queue.claim_job(job.job_id, now=now + 13.0)
+        self.assertIsNotNone(job_b)
+        self.assertEqual(2, job_b.attempt_count)
+        self.assertNotEqual(token_a, token_b)
+
+        # Worker B completes the job
+        completed = self.queue.mark_completed(job.job_id, now=now + 14.0, lease_token=token_b)
+        self.assertEqual(JobState.COMPLETED, completed.state)
+        self.assertEqual(2, completed.attempt_count)
+
+    def test_invariant_6_cancellation_during_deferred_retry_prevents_resurrection(self) -> None:
+        """Invariant 6: Cancellation during deferred retry leaves CANCELLED authoritative; no resurrection."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/cancel-deferred")
+        job = self.queue.enqueue(snapshot, "del-inv-6", max_retries=3, backoff_base_seconds=5.0, now=now)
+
+        # Attempt 1 leased and failed -> deferred to now + 5.0
+        self.queue.lease_next_job(now=now)
+        self.queue.mark_failed(job.job_id, error="Transient fail", now=now)
+        self.assertEqual(JobState.QUEUED, self.queue.get_job(job.job_id).state)
+        self.assertEqual(1, self.client.zcard(self.queue.queue_name))
+
+        # Operator cancels job while deferred in arq:queue
+        cancelled = self.queue.cancel_job(job.job_id, reason="PR closed by user", now=now + 2.0)
+        self.assertEqual(JobState.CANCELLED, cancelled.state)
+
+        # Removed from arq:queue
+        self.assertEqual(0, self.client.zcard(self.queue.queue_name))
+
+        # Attempting to claim or lease must reject and not resurrect
+        claimed, reason = self.queue.claim_job(job.job_id, now=now + 10.0)
+        self.assertIsNone(claimed)
+        self.assertEqual("cancelled", reason)
+
+        leased = self.queue.lease_next_job(now=now + 10.0)
+        self.assertIsNone(leased)
+
+        # recover_zombie_jobs must not touch CANCELLED jobs
+        recovered = self.queue.recover_zombie_jobs(now=now + 20.0)
+        self.assertEqual(0, len(recovered))
+        self.assertEqual(JobState.CANCELLED, self.queue.get_job(job.job_id).state)
+
+    def test_invariant_8_arq_transport_settings_derived_from_review_job(self) -> None:
+        """Invariant 8: max_tries and job_timeout are mathematically derived from ReviewJob semantics."""
+        # 1. job_timeout = 60.0 derived from ReviewJob.deadline_seconds = 60.0
+        self.assertEqual(60.0, WorkerSettings.job_timeout)
+        self.assertEqual(60.0, ReviewWorkerSettings.job_timeout)
+
+        # 2. max_tries = 5 derived from ReviewJob.max_retries (3) + 1 initial try + 1 crash tolerance
+        self.assertEqual(5, WorkerSettings.max_tries)
+        self.assertEqual(5, ReviewWorkerSettings.max_tries)
+
+        # 3. allow_abort_jobs is enabled for operational abort
+        self.assertTrue(WorkerSettings.allow_abort_jobs)
+        self.assertTrue(ReviewWorkerSettings.allow_abort_jobs)
+
+
 
 class FailureScenariosTestSuite(unittest.TestCase):
     """Test all 14 mandatory failure injection scenarios."""
