@@ -627,6 +627,11 @@ class RedisJobQueue(DurableQueueProtocol):
 
         return recovered
 
+    def close(self) -> None:
+        """Close underlying Redis connection if owned."""
+        if self._owns_client and hasattr(self.client, "close"):
+            self.client.close()
+
 
 async def review_job_task(ctx: dict[str, Any], job_id: str) -> dict[str, Any]:
     """Real ARQ worker task function executing a claimed review job with lease token propagation.

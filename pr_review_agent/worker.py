@@ -41,7 +41,14 @@ from pr_review_agent.policy import (
     ReviewTruthStore,
     TruthState,
 )
-from pr_review_agent.adapters.redis_queue import RedisJobQueue, StaleLeaseError
+from arq.connections import RedisSettings
+from arq.constants import default_queue_name
+
+from pr_review_agent.adapters.redis_queue import (
+    RedisJobQueue,
+    StaleLeaseError,
+    review_job_task,
+)
 from pr_review_agent.service_config import ServiceConfig, load_service_config
 
 
@@ -509,3 +516,56 @@ def run_worker(
 
 if __name__ == "__main__":
     run_worker()
+
+
+# ---------------------------------------------------------------------------
+# ARQ 0.28.0 Production Worker Bootstrap & Registration
+# ---------------------------------------------------------------------------
+
+async def arq_startup(ctx: dict[str, Any]) -> None:
+    """Initialize worker dependencies and populate ARQ task context."""
+    config: ServiceConfig = ctx.get("config") or load_service_config(require_live_credentials=False)
+    ctx["config"] = config
+
+    # Initialize queue if not already injected
+    if "queue" not in ctx:
+        redis_url = getattr(config, "redis_url", None) or "redis://127.0.0.1:6379/0"
+        ctx["queue"] = RedisJobQueue(redis_url=redis_url)
+
+    # Initialize AutonomousReviewWorker if not already injected
+    if "worker" not in ctx:
+        ctx["worker"] = AutonomousReviewWorker(config, queue=ctx["queue"])
+
+
+async def arq_shutdown(ctx: dict[str, Any]) -> None:
+    """Cleanly close underlying connections and worker resources."""
+    worker = ctx.get("worker")
+    if worker and hasattr(worker, "close"):
+        worker.close()
+    queue = ctx.get("queue")
+    if queue and hasattr(queue, "close"):
+        queue.close()
+
+
+def get_redis_settings(config: ServiceConfig | None = None) -> RedisSettings:
+    """Derive ARQ RedisSettings from application configuration."""
+    cfg = config or load_service_config(require_live_credentials=False)
+    redis_url = getattr(cfg, "redis_url", None) or "redis://127.0.0.1:6379/0"
+    return RedisSettings.from_dsn(redis_url)
+
+
+class WorkerSettings:
+    """ARQ 0.28.0 Worker configuration for distributed PR review task execution.
+
+    Production CLI startup command:
+        python -m arq pr_review_agent.worker.WorkerSettings
+    """
+
+    functions = [review_job_task]
+    on_startup = arq_startup
+    on_shutdown = arq_shutdown
+    queue_name = default_queue_name
+    redis_settings = get_redis_settings()
+
+
+ReviewWorkerSettings = WorkerSettings

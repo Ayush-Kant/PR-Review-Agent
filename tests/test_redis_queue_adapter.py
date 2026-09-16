@@ -18,7 +18,9 @@ from typing import Any
 import unittest
 import uuid
 
+from arq.constants import default_queue_name
 from arq.jobs import deserialize_job
+from arq.worker import Worker
 import redis
 
 from pr_review_agent.adapters.redis_queue import (
@@ -38,7 +40,13 @@ from pr_review_agent.orchestration import (
     SpecialistType,
 )
 from pr_review_agent.service_config import ServiceConfig, load_service_config
-from pr_review_agent.worker import AutonomousReviewWorker
+from pr_review_agent.worker import (
+    AutonomousReviewWorker,
+    ReviewWorkerSettings,
+    WorkerSettings,
+    arq_shutdown,
+    arq_startup,
+)
 from tests.test_queue_and_checkpoint_contracts import (
     DurableQueueContractTestSuite,
     sample_snapshot,
@@ -307,6 +315,145 @@ class InMemoryPipeline:
         return results
 
 
+class AsyncInMemoryPipeline:
+    """Async pipeline mock supporting commands used by ARQ Worker."""
+
+    def __init__(self, client: InMemoryRedisClient) -> None:
+        self.client = client
+        self.commands: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+
+    async def watch(self, *keys: Any) -> None:
+        pass
+
+    async def exists(self, key: Any) -> int:
+        return 1 if self.client.get(key) is not None else 0
+
+    async def zscore(self, key: Any, member: Any) -> float | None:
+        z = self.client._zsets.get(str(key), {})
+        return z.get(str(member))
+
+    def multi(self) -> None:
+        pass
+
+    def psetex(self, key: Any, ms: int, val: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("psetex", (key, ms, val), {}))
+        return self
+
+    def get(self, key: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("get", (key,), {}))
+        return self
+
+    def incr(self, key: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("incr", (key,), {}))
+        return self
+
+    def expire(self, key: Any, seconds: int) -> AsyncInMemoryPipeline:
+        self.commands.append(("expire", (key, seconds), {}))
+        return self
+
+    def pexpire(self, key: Any, ms: int) -> AsyncInMemoryPipeline:
+        self.commands.append(("pexpire", (key, ms), {}))
+        return self
+
+    def set(self, key: Any, val: Any, **kwargs: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("set", (key, val), kwargs))
+        return self
+
+    def zrem(self, key: Any, *values: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("zrem", (key, *values), {}))
+        return self
+
+    def zincrby(self, key: Any, amount: float, member: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("zincrby", (key, amount, member), {}))
+        return self
+
+    def delete(self, *keys: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("delete", keys, {}))
+        return self
+
+    def info(self, section: str | None = None) -> AsyncInMemoryPipeline:
+        self.commands.append(("info", (section,), {}))
+        return self
+
+    def dbsize(self) -> AsyncInMemoryPipeline:
+        self.commands.append(("dbsize", (), {}))
+        return self
+
+    async def execute(self) -> list[Any]:
+        res = []
+        for cmd, args, kwargs in self.commands:
+            if cmd == "get":
+                res.append(self.client.get(*args))
+            elif cmd == "incr":
+                k = str(args[0])
+                curr = int(self.client.get(k) or b"0")
+                new_v = curr + 1
+                self.client.set(k, new_v)
+                res.append(new_v)
+            elif cmd in ("expire", "pexpire"):
+                res.append(True)
+            elif cmd in ("set", "psetex"):
+                res.append(self.client.set(args[0], args[-1]))
+            elif cmd == "zrem":
+                res.append(self.client.zrem(*args))
+            elif cmd == "delete":
+                for k in args[0]:
+                    if k in self.client._strings:
+                        del self.client._strings[k]
+                res.append(1)
+            elif cmd == "info":
+                res.append({"redis_version": "7.0.0", "used_memory_human": "1M", "connected_clients": 1})
+            elif cmd == "dbsize":
+                res.append(10)
+        self.commands.clear()
+        return res
+
+    async def __aenter__(self) -> AsyncInMemoryPipeline:
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        pass
+
+
+class AsyncInMemoryRedisPool:
+    """Async Redis pool adapter over InMemoryRedisClient compatible with ARQ Worker."""
+
+    def __init__(self, client: InMemoryRedisClient) -> None:
+        self.client = client
+
+    def pipeline(self, transaction: bool = True) -> AsyncInMemoryPipeline:
+        return AsyncInMemoryPipeline(self.client)
+
+    async def get(self, key: Any) -> bytes | None:
+        return self.client.get(key)
+
+    async def set(self, key: Any, val: Any, **kwargs: Any) -> bool:
+        return self.client.set(key, val, **kwargs)
+
+    async def zrangebyscore(
+        self,
+        key: Any,
+        min: float = float("-inf"),
+        max: float = float("inf"),
+        start: int | None = None,
+        num: int | None = None,
+    ) -> list[bytes]:
+        raw = self.client.zrangebyscore(key, min=min, max=max, start=start, num=num)
+        return [r if isinstance(r, bytes) else str(r).encode("utf-8") for r in raw]
+
+    async def zcard(self, key: Any) -> int:
+        return self.client.zcard(key)
+
+    async def zrem(self, key: Any, *values: Any) -> int:
+        return self.client.zrem(key, *values)
+
+    async def psetex(self, key: Any, ms: int, val: Any) -> bool:
+        return self.client.set(key, val)
+
+    async def close(self) -> None:
+        pass
+
+
 class RedisDurableQueueContractTests(DurableQueueContractTestSuite, unittest.TestCase):
     """Verify RedisJobQueue satisfies 100% of the DurableQueueProtocol contract suite."""
 
@@ -358,6 +505,63 @@ class RedisSpecificAdapterTests(unittest.IsolatedAsyncioTestCase):
         running_key = f"review:repo_running:{job.repository_id}"
         self.assertEqual(0, self.client.scard(running_key))
         self.assertEqual(0, self.client.scard(self.queue.running_jobs_key))
+
+    async def test_real_arq_worker_process_main_loop_execution_pipeline(self) -> None:
+        """Trace complete end-to-end path:
+        RedisJobQueue.enqueue() -> arq:job:{job_id} -> arq:queue -> ARQ Worker process loop
+        -> registered review_job_task -> RedisJobQueue.claim_job() -> AutonomousReviewWorker.process_claimed_job()
+        -> mark_completed with lease token -> ARQ finish_job.
+        """
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/hello-world")
+        job = self.queue.enqueue(snapshot, "del-real-arq-worker-loop", now=now)
+
+        # Confirm job is scheduled in arq:queue and serialized in arq:job:{job_id}
+        self.assertEqual(1, self.client.zcard(self.queue.queue_name))
+        self.assertIsNotNone(self.client.get(f"arq:job:{job.job_id}"))
+
+        worker_instance = _create_test_worker(self.queue)
+        async_pool = AsyncInMemoryRedisPool(self.client)
+
+        # Instantiate real ARQ 0.28.0 Worker with review_job_task in burst mode
+        arq_worker = Worker(
+            functions=[review_job_task],
+            redis_pool=async_pool,
+            burst=True,
+            poll_delay=0.01,
+        )
+        arq_worker.ctx["queue"] = self.queue
+        arq_worker.ctx["worker"] = worker_instance
+
+        # Execute genuine ARQ Worker main loop (processes queued job in burst mode)
+        await arq_worker.main()
+
+        # Verify job completed through the full ARQ execution loop
+        completed_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(completed_job)
+        self.assertEqual(JobState.COMPLETED, completed_job.state)
+
+        # Verify repo concurrency slot released
+        running_key = f"review:repo_running:{job.repository_id}"
+        self.assertEqual(0, self.client.scard(running_key))
+        self.assertEqual(0, self.client.scard(self.queue.running_jobs_key))
+
+    async def test_arq_worker_settings_and_bootstrap_configuration(self) -> None:
+        """Verify WorkerSettings and ReviewWorkerSettings export valid ARQ configuration."""
+        self.assertEqual([review_job_task], WorkerSettings.functions)
+        self.assertEqual([review_job_task], ReviewWorkerSettings.functions)
+        self.assertEqual(default_queue_name, WorkerSettings.queue_name)
+        self.assertIsNotNone(WorkerSettings.on_startup)
+        self.assertIsNotNone(WorkerSettings.on_shutdown)
+        self.assertIsNotNone(WorkerSettings.redis_settings)
+
+        # Test arq_startup and arq_shutdown lifecycle hooks
+        ctx: dict[str, Any] = {"config": _make_dummy_service_config(), "queue": self.queue}
+        await arq_startup(ctx)
+        self.assertIn("queue", ctx)
+        self.assertIn("worker", ctx)
+
+        await arq_shutdown(ctx)
 
     async def test_stale_worker_rejection_in_real_worker_path_on_completion(self) -> None:
         """Worker A's completion is rejected when lease expires and Worker B claims the job."""
