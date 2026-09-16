@@ -559,6 +559,22 @@ class WorkerSettings:
 
     Production CLI startup command:
         python -m arq pr_review_agent.worker.WorkerSettings
+
+    Retry Authority & Operational Semantics (Concern 1):
+    1. Application Retry Authority:
+       ReviewJob.attempt_count, ReviewJob.max_retries, and backoff_base_seconds are the sole
+       application retry authority. Generic exception-retry in ARQ is suppressed: application
+       failures are caught and governed strictly by ReviewJob lifecycle and RedisJobQueue.mark_failed().
+       ARQ's explicit deferral mechanism (Retry(defer=...)) is used exclusively to align ARQ's
+       dispatch schedule with the application's exponential backoff.
+    2. Pessimistic Worker-Crash Re-Execution:
+       ARQ's native pessimistic locking (arq:in-progress:{job_id} TTL) is preserved.
+       If a worker process crashes abruptly (SIGKILL, host failure), the in-progress TTL expires
+       in Redis and the surviving/restarted ARQ worker picks up the job from arq:queue for re-execution.
+    3. Operational Abort / Cancellation (Concern 2):
+       allow_abort_jobs = True enables ARQ's background monitoring of abort_jobs_ss (arq:abort).
+       Logical JobState.CANCELLED in review:job:{job_id} remains authoritative; ARQ task abort
+       serves as an operational optimization to terminate active compute immediately.
     """
 
     functions = [review_job_task]
@@ -566,6 +582,16 @@ class WorkerSettings:
     on_shutdown = arq_shutdown
     queue_name = default_queue_name
     redis_settings = get_redis_settings()
+
+    # Concern 2: Enable ARQ operational cancellation listener on abort_jobs_ss
+    allow_abort_jobs = True
+
+    # Concern 1: Allow review_job_task to signal controlled deferral via Retry(defer=...)
+    # while preventing ARQ from imposing an unintended generic exception retry policy.
+    # Set max_tries to a generous ceiling so ARQ transport never truncates application retries
+    # or pessimistic crash recovery.
+    retry_jobs = True
+    max_tries = 10
 
 
 ReviewWorkerSettings = WorkerSettings

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -52,6 +53,29 @@ redis.call('HSET', KEYS[3],
     'lease_expires_at', ARGV[5],
     'updated_at', ARGV[3]
 )
+
+return 'ok'
+"""
+
+# Atomic Lua script for first-time concurrent delivery/job enqueue (Concern 3).
+# Guarantees that racing enqueuers with duplicate delivery_id cannot create competing
+# logical queue states or overwrite an in-flight job.
+ENQUEUE_JOB_LUA = """
+local existing = redis.call('GET', KEYS[1])
+if existing then
+    return 'existing'
+end
+
+redis.call('SET', KEYS[1], ARGV[1])
+
+local hset_args = {'HSET', KEYS[2]}
+for i = 4, #ARGV do
+    table.insert(hset_args, ARGV[i])
+end
+redis.call(unpack(hset_args))
+
+redis.call('SET', KEYS[3], ARGV[2])
+redis.call('ZADD', KEYS[4], ARGV[3], ARGV[1])
 
 return 'ok'
 """
@@ -167,14 +191,19 @@ class RedisJobQueue(DurableQueueProtocol):
         deadline_seconds: float = 60.0,
         now: float | None = None,
     ) -> ReviewJob:
-        """Enqueue a review job atomically with durable identity and real ARQ task serialization."""
+        """Enqueue a review job atomically with durable identity and real ARQ task serialization.
+
+        Enqueue Atomicity (Concern 3):
+        Uses atomic Redis primitive / Lua script to guarantee that duplicate delivery_id
+        cannot create competing logical queue states or overwrite in-flight execution.
+        """
         current_time = time.time() if now is None else now
         job_id = f"job-{delivery_id}"
         delivery_key = self._delivery_key(delivery_id)
         job_key = self._job_key(job_id)
         arq_job_key = self._arq_job_key(job_id)
 
-        # Idempotency check: if delivery already exists, return existing job
+        # Fast idempotency check: if delivery already exists, return existing job
         existing_job_id = self.client.get(delivery_key)
         if existing_job_id:
             existing = self.get_job(self._to_str(existing_job_id))
@@ -226,9 +255,51 @@ class RedisJobQueue(DurableQueueProtocol):
             enqueue_time_ms=score_ms,
         )
 
-        # Pipeline atomic write: delivery index, job hash, real ARQ job, and ARQ queue scheduling
+        # Atomic execution via Lua script if supported
+        if hasattr(self.client, "eval"):
+            try:
+                hset_pairs: list[str] = []
+                for k, v in job_data.items():
+                    hset_pairs.extend([k, str(v)])
+
+                lua_args = [job_id, arq_payload, str(score_ms)] + hset_pairs
+                res = self.client.eval(
+                    ENQUEUE_JOB_LUA,
+                    4,
+                    delivery_key,
+                    job_key,
+                    arq_job_key,
+                    self.queue_name,
+                    *lua_args,
+                )
+                res_str = self._to_str(res)
+                if res_str == "existing":
+                    ex_id = self.client.get(delivery_key)
+                    ex_job = self.get_job(self._to_str(ex_id))
+                    if ex_job is not None:
+                        return ex_job
+                job = self.get_job(job_id)
+                if job is not None:
+                    return job
+            except Exception:
+                pass  # Fall through to atomic SET NX fallback
+
+        # Atomic SET NX fallback: guarantees exactly one enqueuer acquires delivery claim
+        acquired = self.client.set(delivery_key, job_id, nx=True)
+        if not acquired:
+            ex_id = self.client.get(delivery_key)
+            ex_job = self.get_job(self._to_str(ex_id))
+            if ex_job is not None:
+                return ex_job
+            # Brief poll in case winning transaction is in flight
+            for _ in range(20):
+                time.sleep(0.01)
+                ex_job = self.get_job(job_id)
+                if ex_job is not None:
+                    return ex_job
+            raise RuntimeError(f"Concurrent enqueue race condition on delivery {delivery_id}")
+
         pipe = self.client.pipeline(transaction=True)
-        pipe.set(delivery_key, job_id)
         pipe.hset(job_key, mapping=job_data)
         pipe.set(arq_job_key, arq_payload)
         pipe.zadd(self.queue_name, {job_id: score_ms})
@@ -515,7 +586,12 @@ class RedisJobQueue(DurableQueueProtocol):
         *,
         lease_token: str | None = None,
     ) -> ReviewJob:
-        """Cancel a job, recording reason, removing from queue, and signaling ARQ abort."""
+        """Cancel a job, recording reason, removing from queue, and signaling ARQ abort.
+
+        ARQ Cancellation (Concern 2):
+        Logical JobState.CANCELLED remains authoritative; ARQ abort via abort_jobs_ss
+        remains an operational optimization to terminate active compute immediately.
+        """
         current_time = time.time() if now is None else now
         job_key = self._job_key(job_id)
         data = self.client.hgetall(job_key)
@@ -636,12 +712,21 @@ class RedisJobQueue(DurableQueueProtocol):
 async def review_job_task(ctx: dict[str, Any], job_id: str) -> dict[str, Any]:
     """Real ARQ worker task function executing a claimed review job with lease token propagation.
 
-    ARQ Worker Invocation Flow:
-    1. ARQ pops job_id from arq:queue.
-    2. Invokes review_job_task(ctx, job_id).
-    3. queue.claim_job(job_id) atomically checks repo concurrency and claims lease_token.
-    4. If repo at capacity: raises arq.worker.Retry(defer=1.0) so ARQ yields to other jobs.
-    5. worker.process_claimed_job(...) executes review, propagating lease_token to mark_completed/failed.
+    Retry Authority Coordination (Concern 1):
+    1. ReviewJob.attempt_count, max_retries, and backoff_base_seconds remain the sole
+       application retry authority.
+    2. AutonomousReviewWorker.process_claimed_job() coordinates with RedisJobQueue.mark_failed().
+    3. If retries remain (JobState.QUEUED):
+       review_job_task raises arq.worker.Retry(defer=delay), matching the exact exponential
+       backoff schedule computed by the application authority, without ARQ applying generic retries.
+    4. If retries are exhausted (JobState.DEAD_LETTER):
+       review_job_task returns a terminal status, allowing ARQ to cleanly finalize the task.
+    5. If a worker process abruptly dies (crash/SIGKILL), ARQ's pessimistic locking
+       (in_progress TTL expiration) guarantees safe re-execution without losing the job.
+
+    ARQ Operational Cancellation (Concern 2):
+    - When an ARQ worker with allow_abort_jobs=True aborts a task or when cancelled,
+      operational cancellation is caught and logged cleanly.
     """
     queue: DurableQueueProtocol = ctx["queue"]
     worker: Any = ctx["worker"]
@@ -659,9 +744,72 @@ async def review_job_task(ctx: dict[str, Any], job_id: str) -> dict[str, Any]:
             raise Retry(defer=1.0)
         return {"status": "skipped", "reason": lease_token, "job_id": job_id}
 
-    state = await worker.process_claimed_job(job, lease_token=lease_token, now=current_time)
-    return {
-        "status": "completed" if not state.is_cancelled else "cancelled",
-        "job_id": job.job_id,
-        "terminal_status": state.terminal_status,
-    }
+    try:
+        state = await worker.process_claimed_job(job, lease_token=lease_token, now=current_time)
+        if state.is_cancelled or state.terminal_status in (JobState.CANCELLED.value, "cancelled"):
+            return {
+                "status": "cancelled",
+                "job_id": job.job_id,
+                "terminal_status": state.terminal_status,
+            }
+
+        if state.terminal_status in (JobState.FAILED.value, "failed"):
+            updated_job = queue.get_job(job.job_id)
+            if updated_job is not None and updated_job.state == JobState.QUEUED:
+                delay = max(0.05, updated_job.next_run_at - current_time)
+                orig_score = ctx.get("score")
+                if orig_score is not None and hasattr(queue, "client") and hasattr(queue.client, "zadd"):
+                    queue.client.zadd(getattr(queue, "queue_name", default_queue_name), {job.job_id: orig_score})
+                from arq.worker import Retry
+                raise Retry(defer=delay)
+            elif updated_job is not None and updated_job.state == JobState.DEAD_LETTER:
+                return {
+                    "status": "dead_letter",
+                    "job_id": job.job_id,
+                    "terminal_status": state.terminal_status,
+                }
+            return {
+                "status": "failed",
+                "job_id": job.job_id,
+                "terminal_status": state.terminal_status,
+            }
+
+        return {
+            "status": "completed",
+            "job_id": job.job_id,
+            "terminal_status": state.terminal_status,
+        }
+    except StaleLeaseError as exc:
+        logger.warning("Stale lease rejected for job %s (token: %s): %s", job_id, lease_token, exc)
+        return {"status": "stale_lease_rejected", "job_id": job_id, "error": str(exc)}
+    except asyncio.CancelledError:
+        logger.info("ARQ task for job %s received operational abort/cancellation", job_id)
+        return {"status": "cancelled", "job_id": job_id}
+    except Exception as exc:
+        # process_claimed_job already invoked mark_failed() enforcing ReviewJob authority
+        updated_job = queue.get_job(job_id)
+        if updated_job is not None and updated_job.state == JobState.QUEUED:
+            delay = max(0.05, updated_job.next_run_at - current_time)
+            logger.info(
+                "Job %s failed attempt %d/%d; application retry authority deferring for %0.2fs",
+                job_id,
+                updated_job.attempt_count,
+                updated_job.max_retries,
+                delay,
+            )
+            # Re-align ARQ queue score so zincrby sets exact next_run_at timestamp
+            orig_score = ctx.get("score")
+            if orig_score is not None and hasattr(queue, "client") and hasattr(queue.client, "zadd"):
+                queue.client.zadd(getattr(queue, "queue_name", default_queue_name), {job_id: orig_score})
+            from arq.worker import Retry
+            raise Retry(defer=delay)
+        elif updated_job is not None and updated_job.state == JobState.DEAD_LETTER:
+            logger.warning(
+                "Job %s exhausted retries (%d/%d); dead-lettered by application authority",
+                job_id,
+                updated_job.attempt_count,
+                updated_job.max_retries,
+            )
+            return {"status": "dead_letter", "job_id": job_id, "error": str(exc)}
+        else:
+            return {"status": "failed", "job_id": job_id, "error": str(exc)}

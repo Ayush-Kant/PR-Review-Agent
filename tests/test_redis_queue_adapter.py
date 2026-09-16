@@ -122,6 +122,8 @@ class InMemoryRedisClient:
 
     def set(self, name: str, value: Any, **kwargs: Any) -> bool:
         self._ensure_open()
+        if kwargs.get("nx") and str(name) in self._strings:
+            return False
         val_bytes = value if isinstance(value, bytes) else str(value).encode("utf-8")
         self._strings[str(name)] = val_bytes
         return True
@@ -206,6 +208,38 @@ class InMemoryRedisClient:
                 count += 1
         return count
 
+    def zincrby(self, name: str, amount: float, value: Any) -> float:
+        self._ensure_open()
+        s_name = str(name)
+        if s_name not in self._zsets:
+            self._zsets[s_name] = {}
+        s_val = str(value)
+        curr = self._zsets[s_name].get(s_val, 0.0)
+        new_score = curr + float(amount)
+        self._zsets[s_name][s_val] = new_score
+        return new_score
+
+    def zrange(self, name: str, start: int = 0, end: int = -1, **kwargs: Any) -> list[bytes]:
+        self._ensure_open()
+        s_name = str(name)
+        z = self._zsets.get(s_name, {})
+        sorted_items = sorted(z.items(), key=lambda x: (x[1], x[0]))
+        members = [m.encode("utf-8") for m, _ in sorted_items]
+        if end == -1:
+            return members[start:]
+        return members[start : end + 1]
+
+    def zremrangebyscore(self, name: str, min: float | str, max: float | str) -> int:
+        self._ensure_open()
+        s_name = str(name)
+        z = self._zsets.get(s_name, {})
+        min_val = float("-inf") if str(min) in ("-inf", "-inf") else float(min)
+        max_val = float("inf") if str(max) in ("inf", "+inf") else float(max)
+        to_del = [m for m, score in z.items() if min_val <= score <= max_val]
+        for m in to_del:
+            del z[m]
+        return len(to_del)
+
     def zcard(self, name: str) -> int:
         self._ensure_open()
         return len(self._zsets.get(str(name), {}))
@@ -279,6 +313,27 @@ class InMemoryRedisClient:
                 },
             )
             return b"ok"
+        if "ENQUEUE_JOB_LUA" in script or (numkeys == 4 and "existing" in script):
+            delivery_key = str(keys[0])
+            job_key = str(keys[1])
+            arq_job_key = str(keys[2])
+            queue_name = str(keys[3])
+            job_id = str(args[0])
+            arq_payload = args[1]
+            score_ms = float(args[2])
+
+            if self.get(delivery_key) is not None:
+                return b"existing"
+
+            self.set(delivery_key, job_id)
+            hset_mapping: dict[str, Any] = {}
+            for i in range(3, len(args), 2):
+                hset_mapping[str(args[i])] = args[i + 1]
+            self.hset(job_key, mapping=hset_mapping)
+            self.set(arq_job_key, arq_payload)
+            self.zadd(queue_name, {job_id: score_ms})
+            return b"ok"
+
         raise NotImplementedError("Arbitrary lua eval not supported in InMemoryRedisClient")
 
     def keys(self, pattern: str = "*") -> list[str]:
@@ -367,6 +422,14 @@ class AsyncInMemoryPipeline:
         self.commands.append(("zincrby", (key, amount, member), {}))
         return self
 
+    def zrange(self, key: Any, start: int = 0, end: int = -1, **kwargs: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("zrange", (key, start, end), kwargs))
+        return self
+
+    def zremrangebyscore(self, key: Any, min: Any, max: Any) -> AsyncInMemoryPipeline:
+        self.commands.append(("zremrangebyscore", (key, min, max), {}))
+        return self
+
     def delete(self, *keys: Any) -> AsyncInMemoryPipeline:
         self.commands.append(("delete", keys, {}))
         return self
@@ -396,6 +459,12 @@ class AsyncInMemoryPipeline:
                 res.append(self.client.set(args[0], args[-1]))
             elif cmd == "zrem":
                 res.append(self.client.zrem(*args))
+            elif cmd == "zincrby":
+                res.append(self.client.zincrby(*args))
+            elif cmd == "zrange":
+                res.append(self.client.zrange(*args, **kwargs))
+            elif cmd == "zremrangebyscore":
+                res.append(self.client.zremrangebyscore(*args))
             elif cmd == "delete":
                 for k in args[0]:
                     if k in self.client._strings:
@@ -446,6 +515,15 @@ class AsyncInMemoryRedisPool:
 
     async def zrem(self, key: Any, *values: Any) -> int:
         return self.client.zrem(key, *values)
+
+    async def zincrby(self, key: Any, amount: float, member: Any) -> float:
+        return self.client.zincrby(key, amount, member)
+
+    async def zrange(self, key: Any, start: int = 0, end: int = -1, **kwargs: Any) -> list[bytes]:
+        return self.client.zrange(key, start=start, end=end, **kwargs)
+
+    async def zremrangebyscore(self, key: Any, min: Any, max: Any) -> int:
+        return self.client.zremrangebyscore(key, min=min, max=max)
 
     async def psetex(self, key: Any, ms: int, val: Any) -> bool:
         return self.client.set(key, val)
@@ -798,6 +876,109 @@ class RedisSpecificAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("super_secret_pw", rep)
         self.assertNotIn("gh_secret_123", rep)
         self.assertIn("redis_url='***'", rep)
+
+    async def test_concern1_retry_authority_coordination_between_review_job_and_arq(self) -> None:
+        """Concern 1: ReviewJob remains the sole retry authority; ARQ coordinates without generic second policy."""
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/hello-world")
+        job = self.queue.enqueue(snapshot, "del-c1-retry", max_retries=2, backoff_base_seconds=2.0, now=now)
+
+        # Worker configured to fail during review execution
+        failing_worker = _create_test_worker(self.queue, should_fail=True)
+        ctx = {"queue": self.queue, "worker": failing_worker, "score": int(now * 1000)}
+
+        # Attempt 1 execution via review_job_task
+        t_start = time.time()
+        from arq.worker import Retry
+        with self.assertRaises(Retry) as cm:
+            await review_job_task(ctx, job.job_id)
+
+        # Application authority computed exponential backoff: 2.0 * (2 ** (1 - 1)) = 2.0s
+        self.assertAlmostEqual(2.0, cm.exception.defer_score / 1000, places=1)
+
+        # ReviewJob state in queue is QUEUED with attempt_count = 1
+        retried_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(retried_job)
+        self.assertEqual(JobState.QUEUED, retried_job.state)
+        self.assertEqual(1, retried_job.attempt_count)
+        self.assertAlmostEqual(t_start + 2.0, retried_job.next_run_at, delta=1.0)
+
+        # ARQ job definition in arq:job:{job_id} is preserved (NOT deleted)
+        self.assertIsNotNone(self.client.get(f"arq:job:{job.job_id}"))
+
+        # Attempt 2 execution: lease and execute again
+        ctx2 = {"queue": self.queue, "worker": failing_worker, "score": int((now + 2.0) * 1000)}
+        task_res2 = await review_job_task(ctx2, job.job_id)
+
+        # Max retries reached (2/2): application marked DEAD_LETTER, task returned cleanly without ARQ generic retry
+        self.assertEqual("dead_letter", task_res2["status"])
+        dead_job = self.queue.get_job(job.job_id)
+        self.assertIsNotNone(dead_job)
+        self.assertEqual(JobState.DEAD_LETTER, dead_job.state)
+        self.assertEqual(2, dead_job.attempt_count)
+        self.assertEqual(1, self.client.scard(self.queue.dead_letter_key))
+        # Removed from active arq:queue
+        self.assertEqual(0, self.client.zcard(self.queue.queue_name))
+
+    async def test_concern2_arq_cancellation_operational_abort(self) -> None:
+        """Concern 2: allow_abort_jobs is enabled, cancel_job sets domain state and signals ARQ abort."""
+        self.assertTrue(WorkerSettings.allow_abort_jobs)
+        self.assertTrue(ReviewWorkerSettings.allow_abort_jobs)
+
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/hello-world")
+        job = self.queue.enqueue(snapshot, "del-c2-cancel", now=now)
+
+        # Lease the job
+        leased = self.queue.lease_next_job(now=now)
+        self.assertIsNotNone(leased)
+
+        # Operator triggers cancellation
+        cancelled = self.queue.cancel_job(job.job_id, reason="Security review aborted by operator", now=now + 1.0)
+        self.assertEqual(JobState.CANCELLED, cancelled.state)
+
+        # ARQ abort set contains job_id as operational optimization
+        from arq.constants import abort_jobs_ss
+        abort_entries = self.client.zrange(abort_jobs_ss, 0, -1)
+        self.assertIn(job.job_id.encode("utf-8"), abort_entries)
+
+        # Logical state in queue remains authoritative: claiming rejects with cancelled
+        claimed, reason = self.queue.claim_job(job.job_id, now=now + 2.0)
+        self.assertIsNone(claimed)
+        self.assertEqual("cancelled", reason)
+
+    def test_concern3_enqueue_atomicity_and_duplicate_delivery_race(self) -> None:
+        """Concern 3: Concurrent first-time enqueue calls produce exactly one logical job and queue entry."""
+        import concurrent.futures
+
+        now = 1000.0
+        snapshot = sample_snapshot(repo_id="octocat/atomic-repo")
+        delivery_id = "del-c3-atomic-race"
+
+        # Simulate 10 racing concurrent enqueuers with the exact same delivery_id
+        results: list[ReviewJob] = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [
+                executor.submit(self.queue.enqueue, snapshot, delivery_id, now=now)
+                for _ in range(10)
+            ]
+            for f in concurrent.futures.as_completed(futures):
+                results.append(f.result())
+
+        # All 10 returned a valid ReviewJob
+        self.assertEqual(10, len(results))
+        first_job_id = results[0].job_id
+        for r in results:
+            self.assertEqual(first_job_id, r.job_id)
+            self.assertEqual(0, r.attempt_count)
+            self.assertEqual(JobState.QUEUED, r.state)
+
+        # Queue has exactly one job scheduled in arq:queue
+        self.assertEqual(1, self.client.zcard(self.queue.queue_name))
+        # Exactly one delivery mapping
+        self.assertEqual(f"job-{delivery_id}".encode("utf-8"), self.client.get(f"review:delivery:{delivery_id}"))
+        # Exactly one job hash
+        self.assertEqual(b"queued", self.client.hget(f"review:job:{first_job_id}", "state"))
 
 
 class FailureScenariosTestSuite(unittest.TestCase):
