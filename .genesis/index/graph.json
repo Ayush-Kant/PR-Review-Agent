@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "df1e294dad03f69dfe278ea0294d857366a7dc93",
-  "sourceHash": "13af23d7c285d46f4cde937008213643a460c36d76b0d8d797ece5ec82bd5a28",
+  "revision": "de40ae71f68871ae01b5789541b3f4adfa68fd5b",
+  "sourceHash": "4e9c570611aa09615e7e5fe6b35ec83e212a2c3455260bc3baed70485ca4d066",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -27,7 +27,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "6aef4b76f8453a42da08bd82dd441e9aea247947b25c452c3387ad5455f2f825"
+      "contentHash": "340dd489a3bfdd0d9d59f0acbedd3b2544755276230452f7c0d8981a31b961dc"
     },
     {
       "id": "file:pr_review_agent/adapters/github.py",
