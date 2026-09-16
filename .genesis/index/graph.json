@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "32f608021330954a3eeb9cc7207e2d90a18b66b0",
-  "sourceHash": "26b5aabe4480e14dab2327521b4fe06c169609576ed30f0fd987c8fb81b02a9b",
+  "revision": "37d427e4e2ff21795184d6e5ab96b39803e37a0d",
+  "sourceHash": "3dfec515b695a099f4116185e65a85049cee4ac715c8a42e83e0ba5586663094",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -47,7 +47,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "69abbb9cfd5d53f0e35a7c45ab419e815b0755d884b15de2e83ff4895057ae69"
+      "contentHash": "d8dbdff275c5a9a2df189fdeae42391e877a773b7f6ad433d7556a85244dbbd1"
     },
     {
       "id": "file:pr_review_agent/adapters/webhook_ingress.py",
@@ -77,7 +77,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "e09f4c37e3f98310f4e03b6c863fc52469b3ad51bc32f92521a85a49851cf630"
+      "contentHash": "3c0a1dd7a43c413a8aa619ba6dfe086542f6ce79f42606c3cb10779eae1a9030"
     },
     {
       "id": "file:pr_review_agent/github_output.py",
@@ -127,7 +127,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "570746a7245636a4c38b5f9824ca46e486cffbebdc303f993274f8596ae650de"
+      "contentHash": "c0b1b6a432966e1548da2b00d6dfea7da37a71c2897fd4e05aa98fede2734d08"
     },
     {
       "id": "file:pr_review_agent/retrieval.py",
@@ -177,7 +177,17 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "92a4f7756896d6c9539ff8b9a7e5235a2593761e8ef84b574071832b1882de79"
+      "contentHash": "bfcd7f31844972f97c2baf58b1f6e762ad74e77c287e48ed91ff0bf90c548d84"
+    },
+    {
+      "id": "file:scripts/evaluate_golden.py",
+      "type": "file",
+      "label": "scripts/evaluate_golden.py",
+      "path": "scripts/evaluate_golden.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "c11d64149e11c595d94a3cde775e71baa194a1bd207b11f6e7f33a9e34de577c"
     },
     {
       "id": "file:scripts/live_pr_review.py",
@@ -227,7 +237,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "fbc0d17e71ec6912c111eb077d104f8f2a7ef91b7cad143f707703a890ab083a"
+      "contentHash": "6c0d88c274dcd804db352376407ee800a5551751b22c0d1808f3e434b80985af"
     },
     {
       "id": "file:tests/test_finding_policy_and_hitl.py",
@@ -237,7 +247,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "b1fdd2f95a6bf8a5c05899b4eb2fc27620206db76078b8bb9e6bb17d3c7913e6"
+      "contentHash": "b3f78890147a372868d3570f3504ea3cc8f42d4315b6385ba85903108aa2b99e"
     },
     {
       "id": "file:tests/test_github_review_output.py",

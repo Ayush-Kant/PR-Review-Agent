@@ -17,13 +17,32 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from enum import Enum
+from pathlib import Path
 import json
 import sqlite3
 import time
 from typing import Any
 import uuid
 
+from pr_review_agent.policy import normalize_category_family
 from pr_review_agent.security import SecretLeakageScanner
+
+
+SEVERITY_TIERS: dict[str, int] = {
+    "critical": 4,
+    "high": 3,
+    "blocking": 3,
+    "medium": 2,
+    "low": 1,
+    "info": 0,
+}
+
+
+def compute_severity_distance(actual_sev: str, expected_sev: str) -> int:
+    """Compute absolute tier distance between actual and expected severity strings."""
+    act_tier = SEVERITY_TIERS.get((actual_sev or "").strip().lower(), 1)
+    exp_tier = SEVERITY_TIERS.get((expected_sev or "").strip().lower(), 1)
+    return abs(act_tier - exp_tier)
 
 
 class DatasetSplit(str, Enum):
@@ -45,6 +64,9 @@ class GoldenFinding:
     summary: str = ""
     is_required: bool = True
     line_tolerance: int = 0
+    severity_tolerance: int = 1
+    notes: str = ""
+
 
 
 @dataclass(frozen=True)
@@ -108,6 +130,70 @@ class GoldenPRDataset:
         return tuple(filtered)
 
 
+def load_golden_dataset(file_path: str | Path) -> GoldenPRDataset:
+    """Load and validate a versioned GoldenPRDataset from a JSON file with secret scanning."""
+    p = Path(file_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Golden dataset file not found: {p}")
+    with open(p, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    dataset_id = str(data.get("dataset_id", "golden-v1"))
+    version = str(data.get("version", "1.0"))
+    cases_raw = data.get("cases", [])
+
+    parsed_cases: list[GoldenPRCase] = []
+    for c_data in cases_raw:
+        case_id = str(c_data["case_id"])
+        repo_id = str(c_data.get("repository_id", "owner/repo"))
+        title = str(c_data.get("title", ""))
+        base_sha = str(c_data.get("base_sha", "base123"))
+        head_sha = str(c_data.get("head_sha", "head123"))
+        changed_files = tuple(str(cf) for cf in c_data.get("changed_files", ()))
+        diff_content = str(c_data.get("diff_content", ""))
+        split_str = str(c_data.get("split", "development")).lower()
+        split = DatasetSplit.HOLDOUT if split_str == "holdout" else DatasetSplit.DEVELOPMENT
+        metadata = dict(c_data.get("metadata", {}))
+
+        expected_findings: list[GoldenFinding] = []
+        for ef_data in c_data.get("expected_findings", []):
+            lr = ef_data.get("line_range", [1, 1])
+            line_range = (int(lr[0]), int(lr[1]))
+            ef = GoldenFinding(
+                finding_id=str(ef_data["finding_id"]),
+                category=str(ef_data["category"]),
+                severity=str(ef_data["severity"]),
+                file_path=str(ef_data["file_path"]),
+                line_range=line_range,
+                summary=str(ef_data.get("summary", "")),
+                is_required=bool(ef_data.get("is_required", True)),
+                line_tolerance=int(ef_data.get("line_tolerance", 0)),
+                severity_tolerance=int(ef_data.get("severity_tolerance", 1)),
+                notes=str(ef_data.get("notes", "")),
+            )
+            expected_findings.append(ef)
+
+        golden_case = GoldenPRCase(
+            case_id=case_id,
+            repository_id=repo_id,
+            title=title,
+            base_sha=base_sha,
+            head_sha=head_sha,
+            changed_files=changed_files,
+            diff_content=diff_content,
+            expected_findings=tuple(expected_findings),
+            split=split,
+            metadata=metadata,
+        )
+        parsed_cases.append(golden_case)
+
+    return GoldenPRDataset(
+        dataset_id=dataset_id,
+        version=version,
+        cases=tuple(parsed_cases),
+    )
+
+
 @dataclass(frozen=True)
 class EvaluationCaseResult:
     """Evaluation output for a single golden PR case."""
@@ -123,6 +209,12 @@ class EvaluationCaseResult:
     cost_usd: float | None = None
     is_cost_complete: bool = True
     has_unavailable_latency: bool = False
+    exact_severity_matches: int = 0
+    one_tier_deviations: int = 0
+    major_deviations: int = 0
+    severity_over_count: int = 0
+    severity_under_count: int = 0
+    total_severity_distance: int = 0
 
 
 @dataclass(frozen=True)
@@ -146,6 +238,12 @@ class EvaluationMetrics:
     total_cost_usd: float | None = None
     is_cost_complete: bool = True
     has_unavailable_latency: bool = False
+    severity_exact_match_rate: float = 1.0
+    mean_severity_distance: float = 0.0
+    over_severity_rate: float = 0.0
+    under_severity_rate: float = 0.0
+    one_tier_deviation_rate: float = 0.0
+    major_deviation_rate: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -162,6 +260,10 @@ class RegressionGateConfig:
     min_critical_finding_recall: float | None = None
     max_regression_cost_usd: float | None = None
     max_regression_duration_seconds: float | None = None
+    min_severity_exact_match_rate: float | None = None
+    max_mean_severity_distance: float | None = None
+    max_over_severity_rate: float | None = None
+    max_under_severity_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -188,11 +290,13 @@ class EvaluationRunner:
             return False
 
         c_cat = getattr(candidate, "category", "") or ""
-        if c_cat.strip().lower() != expected.category.strip().lower():
+        # Semantic category family normalization (Section 6)
+        if normalize_category_family(c_cat) != normalize_category_family(expected.category):
             return False
 
         c_sev = getattr(candidate, "severity", "") or ""
-        if c_sev.strip().lower() != expected.severity.strip().lower():
+        sev_dist = compute_severity_distance(c_sev, expected.severity)
+        if sev_dist > expected.severity_tolerance:
             return False
 
         c_range = getattr(candidate, "line_range", None)
@@ -220,6 +324,13 @@ class EvaluationRunner:
         matched_expected_ids: set[str] = set()
         matched_candidate_indices: set[int] = set()
 
+        exact_sev_matches = 0
+        one_tier_devs = 0
+        major_devs = 0
+        over_sev = 0
+        under_sev = 0
+        tot_sev_dist = 0
+
         for expected in case.expected_findings:
             for idx, candidate in enumerate(unmatched_candidates):
                 if idx in matched_candidate_indices:
@@ -227,6 +338,24 @@ class EvaluationRunner:
                 if self._is_finding_match(expected, candidate):
                     matched_expected_ids.add(expected.finding_id)
                     matched_candidate_indices.add(idx)
+
+                    c_sev = getattr(candidate, "severity", "") or ""
+                    dist = compute_severity_distance(c_sev, expected.severity)
+                    act_tier = SEVERITY_TIERS.get((c_sev or "").strip().lower(), 1)
+                    exp_tier = SEVERITY_TIERS.get((expected.severity or "").strip().lower(), 1)
+
+                    tot_sev_dist += dist
+                    if dist == 0:
+                        exact_sev_matches += 1
+                    elif dist == 1:
+                        one_tier_devs += 1
+                    else:
+                        major_devs += 1
+
+                    if act_tier > exp_tier:
+                        over_sev += 1
+                    elif act_tier < exp_tier:
+                        under_sev += 1
                     break
 
         tp = len(matched_candidate_indices)
@@ -251,6 +380,12 @@ class EvaluationRunner:
             cost_usd=cost_usd,
             is_cost_complete=is_cost_complete,
             has_unavailable_latency=(duration_seconds is None),
+            exact_severity_matches=exact_sev_matches,
+            one_tier_deviations=one_tier_devs,
+            major_deviations=major_devs,
+            severity_over_count=over_sev,
+            severity_under_count=under_sev,
+            total_severity_distance=tot_sev_dist,
         )
 
     def evaluate_dataset(
@@ -295,6 +430,13 @@ class EvaluationRunner:
         tot_crit_exp = 0
         tot_crit_det = 0
 
+        tot_exact_sev = 0
+        tot_one_tier = 0
+        tot_major_dev = 0
+        tot_over_sev = 0
+        tot_under_sev = 0
+        tot_sev_dist = 0
+
         durations: list[float] = []
         costs: list[float] = []
         is_cost_comp = True
@@ -335,6 +477,13 @@ class EvaluationRunner:
             tot_crit_exp += res.critical_expected
             tot_crit_det += res.critical_detected
 
+            tot_exact_sev += res.exact_severity_matches
+            tot_one_tier += res.one_tier_deviations
+            tot_major_dev += res.major_deviations
+            tot_over_sev += res.severity_over_count
+            tot_under_sev += res.severity_under_count
+            tot_sev_dist += res.total_severity_distance
+
         precision = (tot_tp / (tot_tp + tot_fp)) if (tot_tp + tot_fp) > 0 else 0.0
         recall = (tot_tp / (tot_tp + tot_fn)) if (tot_tp + tot_fn) > 0 else 0.0
         f1 = (2.0 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
@@ -342,6 +491,13 @@ class EvaluationRunner:
 
         mean_dur = (sum(durations) / len(durations)) if durations else None
         tot_cost = round(sum(costs), 6) if costs else (0.0 if is_cost_comp and not cost_map else None)
+
+        exact_match_rate = (tot_exact_sev / tot_tp) if tot_tp > 0 else (1.0 if tot_req_expected == 0 else 0.0)
+        mean_sev_dist = (tot_sev_dist / tot_tp) if tot_tp > 0 else 0.0
+        over_rate = (tot_over_sev / tot_tp) if tot_tp > 0 else 0.0
+        under_rate = (tot_under_sev / tot_tp) if tot_tp > 0 else 0.0
+        one_tier_rate = (tot_one_tier / tot_tp) if tot_tp > 0 else 0.0
+        major_dev_rate = (tot_major_dev / tot_tp) if tot_tp > 0 else 0.0
 
         return EvaluationMetrics(
             split=split,
@@ -361,6 +517,12 @@ class EvaluationRunner:
             total_cost_usd=tot_cost,
             is_cost_complete=is_cost_comp,
             has_unavailable_latency=has_unavail_latency,
+            severity_exact_match_rate=round(exact_match_rate, 4),
+            mean_severity_distance=round(mean_sev_dist, 4),
+            over_severity_rate=round(over_rate, 4),
+            under_severity_rate=round(under_rate, 4),
+            one_tier_deviation_rate=round(one_tier_rate, 4),
+            major_deviation_rate=round(major_dev_rate, 4),
         )
 
 
@@ -435,6 +597,34 @@ class PromotionGateEvaluator:
                 failed_gates.append("max_regression_duration_seconds")
                 reasons.append(
                     f"Mean execution duration ({metrics.mean_duration_seconds:.2f}s) exceeds limit ({config.max_regression_duration_seconds:.2f}s)"
+                )
+
+        if config.min_severity_exact_match_rate is not None:
+            if metrics.severity_exact_match_rate < config.min_severity_exact_match_rate:
+                failed_gates.append("min_severity_exact_match_rate")
+                reasons.append(
+                    f"Candidate severity exact match rate ({metrics.severity_exact_match_rate:.4f}) is below threshold ({config.min_severity_exact_match_rate:.4f})"
+                )
+
+        if config.max_mean_severity_distance is not None:
+            if metrics.mean_severity_distance > config.max_mean_severity_distance:
+                failed_gates.append("max_mean_severity_distance")
+                reasons.append(
+                    f"Candidate mean severity distance ({metrics.mean_severity_distance:.4f}) exceeds threshold ({config.max_mean_severity_distance:.4f})"
+                )
+
+        if config.max_over_severity_rate is not None:
+            if metrics.over_severity_rate > config.max_over_severity_rate:
+                failed_gates.append("max_over_severity_rate")
+                reasons.append(
+                    f"Candidate over-severity rate ({metrics.over_severity_rate:.4f}) exceeds threshold ({config.max_over_severity_rate:.4f})"
+                )
+
+        if config.max_under_severity_rate is not None:
+            if metrics.under_severity_rate > config.max_under_severity_rate:
+                failed_gates.append("max_under_severity_rate")
+                reasons.append(
+                    f"Candidate under-severity rate ({metrics.under_severity_rate:.4f}) exceeds threshold ({config.max_under_severity_rate:.4f})"
                 )
 
         passed = len(failed_gates) == 0

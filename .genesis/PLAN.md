@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-16T12:17:28.804Z
+- plan approval: Ayush Kant at 2026-09-16T13:21:30.117Z
 
 ## Tasks
 
@@ -110,5 +110,13 @@
 - requirements: FR-05
 - scope: not bounded
 - gates: test: python -m pytest
+- next: Run the task pre-flight.
+
+### quality-calibration-golden-benchmark — Calibrate reviewer severity deterministically, add golden benchmark dataset and offline evaluation suite
+
+- state/risk: done / medium
+- requirements: FR-10
+- scope: not bounded
+- gates: test: python -m pytest, independent-review: pass
 - next: Run the task pre-flight.
 

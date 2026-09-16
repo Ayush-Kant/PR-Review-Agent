@@ -144,7 +144,16 @@ class AutonomousReviewWorker:
                     model=config.model_name,
                     audit_spine=self.audit_spine,
                 )
-            self.orchestrator = ReviewOrchestrator(specialist_handlers=handlers)
+            default_instructions = {
+                SpecialistType.SECURITY: "Review code changes for security vulnerabilities, authentication/authorization bypasses, data exposure, and unsafe cryptographic use.",
+                SpecialistType.QUALITY: "Review code changes for correctness bugs, runtime exceptions, logic flaws, resource leaks, and code quality issues.",
+                SpecialistType.TESTS: "Review code changes for test coverage gaps, missing regression tests, edge case omissions, and ineffective assertions.",
+                SpecialistType.DOCUMENTATION: "Review documentation and docstrings for accuracy against code changes, misleading statements, and missing documentation.",
+            }
+            self.orchestrator = ReviewOrchestrator(
+                specialist_handlers=handlers,
+                default_instructions=default_instructions,
+            )
 
         self.policy_engine = policy_engine or ReviewPolicyEngine(policy_version="v1")
         self.aggregator = aggregator or FindingAggregator()

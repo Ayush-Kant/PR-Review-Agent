@@ -17,6 +17,7 @@ from pr_review_agent.policy import (
     ReviewPolicyEngine,
     ReviewTruthRecord,
     ReviewTruthStore,
+    SeverityCalibrator,
     TruthState,
 )
 
@@ -954,3 +955,256 @@ def test_different_category_families_on_same_line_remain_separate() -> None:
     categories = {c.category for c in canonical}
     assert "security" in categories
     assert "docstring" in categories
+
+
+# --- Severity Calibration Model Tests ---
+
+
+def test_calibration_mutable_default_argument_calibrated_to_medium() -> None:
+    """Raw model severity 'high' on mutable default argument is calibrated to 'medium'."""
+    aggregator = FindingAggregator()
+    cand = CandidateFinding(
+        finding_id="cand-mut-1",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="quality",
+        severity="high",  # Raw inflated severity
+        confidence=0.95,
+        summary="Function uses mutable default argument items=[] which retains state across calls.",
+        rationale="Mutable default arguments in Python are shared across all invocations.",
+        file_path="src/handlers.py",
+        line_range=(20, 25),
+        evidence_refs=("diff://src/handlers.py#L20-L25",),
+        remediation="Use items: list | None = None and default to new list inside function body.",
+    )
+
+    canonical = aggregator.aggregate([cand], repository_id="owner/repo", head_sha="sha1")
+    assert len(canonical) == 1
+    finding = canonical[0]
+    assert finding.raw_severity == "high"
+    assert finding.calibrated_severity == "medium"
+    assert finding.severity == "medium"  # Policy consumes calibrated severity
+    assert finding.calibration_rule == "quality_mutable_default_medium"
+    assert "quality" in finding.calibration_reason.lower()
+    assert "medium" in finding.calibration_reason.lower()
+
+
+def test_calibration_documentation_mismatch_calibrated_to_low_or_medium() -> None:
+    """Raw model severity 'high' on documentation discrepancy must not remain high."""
+    aggregator = FindingAggregator()
+    # 1. Non-material / minor discrepancy -> low
+    cand_minor = CandidateFinding(
+        finding_id="cand-doc-minor",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.DOCUMENTATION,
+        category="documentation",
+        severity="high",  # Raw inflated severity
+        confidence=0.90,
+        summary="Docstring formatting styling issue with project standards.",
+        rationale="Missing colon in docstring parameter description.",
+        file_path="src/utils.py",
+        line_range=(5, 10),
+        evidence_refs=("diff://src/utils.py#L5-L10",),
+    )
+    canon_minor = aggregator.aggregate([cand_minor], repository_id="owner/repo", head_sha="sha1")[0]
+    assert canon_minor.raw_severity == "high"
+    assert canon_minor.calibrated_severity == "low"
+    assert canon_minor.severity == "low"
+    assert canon_minor.calibration_rule == "doc_high_capped_to_low"
+
+    # 2. Material contradiction of runtime behavior -> medium
+    cand_material = CandidateFinding(
+        finding_id="cand-doc-mat",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.DOCUMENTATION,
+        category="documentation",
+        severity="high",  # Raw inflated severity
+        confidence=0.90,
+        summary="Docstring contradicts runtime return type: claims to return dict but returns None.",
+        rationale="Function docstring states it returns a dict on missing key, but implementation returns None.",
+        file_path="src/service.py",
+        line_range=(15, 20),
+        evidence_refs=("diff://src/service.py#L15-L20",),
+    )
+    canon_mat = aggregator.aggregate([cand_material], repository_id="owner/repo", head_sha="sha1")[0]
+    assert canon_mat.raw_severity == "high"
+    assert canon_mat.calibrated_severity == "medium"
+    assert canon_mat.severity == "medium"
+    assert canon_mat.calibration_rule == "doc_material_contradiction_medium"
+
+
+def test_calibration_correctness_runtime_crash_remains_high() -> None:
+    """Genuine runtime crashes and unhandled exceptions remain 'high'."""
+    aggregator = FindingAggregator()
+    cand = CandidateFinding(
+        finding_id="cand-crash-1",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="correctness",
+        severity="high",
+        confidence=0.92,
+        summary="ZeroDivisionError occurs on empty scores list without empty check.",
+        rationale="When scores is empty, len(scores) is 0 causing an unhandled division by zero.",
+        file_path="src/metrics.py",
+        line_range=(30, 32),
+        evidence_refs=("diff://src/metrics.py#L30-L32",),
+    )
+    canonical = aggregator.aggregate([cand], repository_id="owner/repo", head_sha="sha1")[0]
+    assert canonical.raw_severity == "high"
+    assert canonical.calibrated_severity == "high"
+    assert canonical.severity == "high"
+    assert canonical.calibration_rule == "correctness_runtime_crash_high"
+
+
+def test_calibration_verified_security_vulnerability_remains_high() -> None:
+    """Security finding in sensitive authentication / credential context remains 'high'."""
+    aggregator = FindingAggregator()
+    cand = CandidateFinding(
+        finding_id="cand-sec-auth",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.SECURITY,
+        category="security",
+        severity="high",
+        confidence=0.95,
+        summary="Insecure pseudo-random generator used for session token generation.",
+        rationale="random.choices is not cryptographically secure for password-reset tokens.",
+        file_path="src/auth/token_service.py",
+        line_range=(12, 16),
+        evidence_refs=("diff://src/auth/token_service.py#L12-L16",),
+    )
+    canonical = aggregator.aggregate([cand], repository_id="owner/repo", head_sha="sha1")[0]
+    assert canonical.raw_severity == "high"
+    assert canonical.calibrated_severity == "high"
+    assert canonical.severity == "high"
+    assert canonical.calibration_rule == "security_sensitive_context_high"
+
+
+def test_calibration_benign_ui_randomness_calibrated_to_low() -> None:
+    """Benign UI styling / animation randomness does not remain a high-severity security finding."""
+    aggregator = FindingAggregator()
+    cand = CandidateFinding(
+        finding_id="cand-sec-ui",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.SECURITY,
+        category="security",
+        severity="high",  # Specialist false positive
+        confidence=0.60,
+        summary="Use of random.choice for UI badge animation color palette.",
+        rationale="PRNG used in frontend styling script.",
+        file_path="src/frontend/badge_animation.py",
+        line_range=(40, 42),
+        evidence_refs=("diff://src/frontend/badge_animation.py#L40-L42",),
+    )
+    canonical = aggregator.aggregate([cand], repository_id="owner/repo", head_sha="sha1")[0]
+    assert canonical.raw_severity == "high"
+    assert canonical.calibrated_severity == "low"
+    assert canonical.severity == "low"
+    assert canonical.calibration_rule == "security_benign_context_low"
+
+
+def test_canonical_finding_backward_compatibility_and_field_preservation() -> None:
+    """CanonicalFinding preserves raw and calibrated severity, with default fallback."""
+    # When instantiated without raw_severity or calibrated_severity:
+    f1 = CanonicalFinding(
+        canonical_id="f-compat",
+        repository_id="owner/repo",
+        head_sha="sha1",
+        category="quality",
+        severity="medium",
+        confidence=0.85,
+        summary="Test finding",
+        rationale="Rationale",
+        file_path="src/main.py",
+        line_range=(10, 20),
+        contributing_candidate_ids=("cand-1",),
+        contributing_specialists=("quality",),
+        evidence_refs=("ref-1",),
+    )
+    assert f1.raw_severity == "medium"
+    assert f1.calibrated_severity == "medium"
+    assert f1.severity == "medium"
+
+    # When instantiated with distinct raw and calibrated severity:
+    f2 = CanonicalFinding(
+        canonical_id="f-calib",
+        repository_id="owner/repo",
+        head_sha="sha1",
+        category="quality",
+        severity="medium",
+        confidence=0.90,
+        summary="Mutable default",
+        rationale="Rationale",
+        file_path="src/main.py",
+        line_range=(10, 20),
+        contributing_candidate_ids=("cand-2",),
+        contributing_specialists=("quality",),
+        evidence_refs=("ref-2",),
+        raw_severity="high",
+        calibrated_severity="medium",
+        calibration_rule="quality_mutable_default_medium",
+        calibration_reason="Quality maintainability defect",
+    )
+    assert f2.raw_severity == "high"
+    assert f2.calibrated_severity == "medium"
+    assert f2.severity == "medium"
+    assert f2.calibration_rule == "quality_mutable_default_medium"
+
+
+def test_policy_uses_calibrated_severity_for_disposition() -> None:
+    """ReviewPolicyEngine dispositions are driven by calibrated severity, not untrusted raw severity."""
+    engine = ReviewPolicyEngine()
+
+    # Case A: Mutable default finding with raw_severity='high' but calibrated_severity='medium'
+    # Under policy: high confidence (0.90) + medium severity -> AUTO_APPROVED
+    # If policy used raw 'high', it would have been HELD for maintainer review.
+    f_medium_calibrated = CanonicalFinding(
+        canonical_id="can-calib-auto",
+        repository_id="owner/repo",
+        head_sha="sha1",
+        category="quality",
+        severity="medium",
+        confidence=0.90,
+        summary="Mutable default argument in utility function",
+        rationale="Items default argument retains state.",
+        file_path="src/utils.py",
+        line_range=(10, 20),
+        contributing_candidate_ids=("cand-1",),
+        contributing_specialists=("quality",),
+        evidence_refs=("ref-1",),
+        raw_severity="high",
+        calibrated_severity="medium",
+        calibration_rule="quality_mutable_default_medium",
+    )
+    ev_verified_med = [_make_validation_result("can-calib-auto")]
+    eval_f_medium = engine.evaluate(f_medium_calibrated, is_fresh=True, evidence_results=ev_verified_med)
+
+    assert eval_f_medium.disposition == FindingDisposition.AUTO_APPROVED
+    assert eval_f_medium.raw_severity == "high"
+    assert eval_f_medium.calibrated_severity == "medium"
+    assert eval_f_medium.severity == "medium"
+
+    # Case B: Correctness runtime crash with raw_severity='high' and calibrated_severity='high'
+    # Under policy: high severity -> HELD for maintainer HITL review
+    f_high_crash = CanonicalFinding(
+        canonical_id="can-crash-held",
+        repository_id="owner/repo",
+        head_sha="sha1",
+        category="correctness",
+        severity="high",
+        confidence=0.95,
+        summary="Unhandled ZeroDivisionError in calculation",
+        rationale="Division by zero crash.",
+        file_path="src/calc.py",
+        line_range=(10, 20),
+        contributing_candidate_ids=("cand-2",),
+        contributing_specialists=("quality",),
+        evidence_refs=("ref-2",),
+        raw_severity="high",
+        calibrated_severity="high",
+        calibration_rule="correctness_runtime_crash_high",
+    )
+    ev_verified_high = [_make_validation_result("can-crash-held")]
+    eval_f_high = engine.evaluate(f_high_crash, is_fresh=True, evidence_results=ev_verified_high)
+
+    assert eval_f_high.disposition == FindingDisposition.HELD
+    assert eval_f_high.calibrated_severity == "high"

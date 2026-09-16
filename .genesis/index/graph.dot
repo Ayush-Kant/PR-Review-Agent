@@ -18,6 +18,7 @@ digraph genesis {
   "file:pr_review_agent/server.py" [label="pr_review_agent/server.py",class="file"];
   "file:pr_review_agent/service_config.py" [label="pr_review_agent/service_config.py",class="file"];
   "file:pr_review_agent/worker.py" [label="pr_review_agent/worker.py",class="file"];
+  "file:scripts/evaluate_golden.py" [label="scripts/evaluate_golden.py",class="file"];
   "file:scripts/live_pr_review.py" [label="scripts/live_pr_review.py",class="file"];
   "file:tests/test_audit_observability_dashboard.py" [label="tests/test_audit_observability_dashboard.py",class="file"];
   "file:tests/test_cost_and_budget_controls.py" [label="tests/test_cost_and_budget_controls.py",class="file"];

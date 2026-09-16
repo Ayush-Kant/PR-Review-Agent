@@ -1,0 +1,307 @@
+{
+  "dataset_id": "golden_prs_v1",
+  "version": "1.0.0",
+  "description": "Versioned golden PR benchmark suite for reviewer quality calibration, severity distance, and category family evaluation.",
+  "cases": [
+    {
+      "case_id": "golden-001-correctness-empty-crash",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "fix: calculate average score across student submissions",
+      "base_sha": "base-corr-001",
+      "head_sha": "head-corr-001",
+      "changed_files": [
+        "src/analytics/metrics.py"
+      ],
+      "diff_content": "diff --git a/src/analytics/metrics.py b/src/analytics/metrics.py\n--- a/src/analytics/metrics.py\n+++ b/src/analytics/metrics.py\n@@ -10,4 +10,6 @@\n def calculate_average(scores: list[float]) -> float:\n-    return 0.0\n+    # Unhandled empty list results in ZeroDivisionError crash\n+    return sum(scores) / len(scores)\n",
+      "split": "development",
+      "metadata": {
+        "domain": "correctness",
+        "archetype": "empty_input_runtime_crash"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-corr-001",
+          "category": "correctness",
+          "severity": "high",
+          "file_path": "src/analytics/metrics.py",
+          "line_range": [11, 13],
+          "summary": "ZeroDivisionError occurs when scores is empty because len(scores) is 0 without an empty-check guard.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Runtime crash defect on empty input. Calibrates to high severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-002-security-insecure-token",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "feat: generate session reset authentication tokens",
+      "base_sha": "base-sec-002",
+      "head_sha": "head-sec-002",
+      "changed_files": [
+        "src/auth/tokens.py"
+      ],
+      "diff_content": "diff --git a/src/auth/tokens.py b/src/auth/tokens.py\n--- a/src/auth/tokens.py\n+++ b/src/auth/tokens.py\n@@ -1,5 +1,7 @@\n+import random\n+import string\n+\n def generate_reset_token(length: int = 32) -> str:\n-    return \"\"\n+    # Insecure pseudo-random number generator for authentication token\n+    return \"\".join(random.choices(string.ascii_letters + string.digits, k=length))\n",
+      "split": "development",
+      "metadata": {
+        "domain": "security",
+        "archetype": "insecure_prng_auth_token"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-sec-002",
+          "category": "security",
+          "severity": "high",
+          "file_path": "src/auth/tokens.py",
+          "line_range": [4, 7],
+          "summary": "Use of random.choices for authentication reset tokens is cryptographically insecure; secrets.token_urlsafe or secrets.choice should be used.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Predictable PRNG in security-sensitive authentication token generation. Calibrates to high severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-003-quality-mutable-default",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "feat: record user audit activity events",
+      "base_sha": "base-qual-003",
+      "head_sha": "head-qual-003",
+      "changed_files": [
+        "src/logging/audit.py"
+      ],
+      "diff_content": "diff --git a/src/logging/audit.py b/src/logging/audit.py\n--- a/src/logging/audit.py\n+++ b/src/logging/audit.py\n@@ -5,3 +5,6 @@\n-def log_event(event_name: str) -> None:\n-    pass\n+def log_event(event_name: str, tags: list[str] = []) -> list[str]:\n+    # Mutable default argument retains state across function invocations\n+    tags.append(event_name)\n+    return tags\n",
+      "split": "development",
+      "metadata": {
+        "domain": "quality",
+        "archetype": "mutable_default_argument"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-qual-003",
+          "category": "quality_defect",
+          "severity": "medium",
+          "file_path": "src/logging/audit.py",
+          "line_range": [5, 9],
+          "summary": "Default argument tags uses mutable list default [] which retains modified state across calls.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Mutable default argument is a quality/maintainability defect calibrated deterministically to medium severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-004-docs-contradiction",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "docs: document account status lookup behavior",
+      "base_sha": "base-doc-004",
+      "head_sha": "head-doc-004",
+      "changed_files": [
+        "src/users/service.py"
+      ],
+      "diff_content": "diff --git a/src/users/service.py b/src/users/service.py\n--- a/src/users/service.py\n+++ b/src/users/service.py\n@@ -12,6 +12,7 @@\n def get_user_status(user_id: str) -> str | None:\n     \"\"\"Retrieve the status of a user.\n \n-    Returns None if the user does not exist.\n+    Returns an empty dict if the user does not exist.\n+    Raises KeyError if the user is inactive.\n     \"\"\"\n     user = DB.get(user_id)\n     return user.status if user else None\n",
+      "split": "development",
+      "metadata": {
+        "domain": "documentation",
+        "archetype": "docstring_contradicts_implementation"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-doc-004",
+          "category": "documentation",
+          "severity": "low",
+          "file_path": "src/users/service.py",
+          "line_range": [13, 18],
+          "summary": "Docstring states it returns empty dict and raises KeyError, but implementation returns None and does not raise KeyError.",
+          "is_required": true,
+          "line_tolerance": 3,
+          "severity_tolerance": 1,
+          "notes": "Documentation contradicts runtime return type and exception behavior. Calibrated to low/medium severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-005-tests-smoke-no-assert",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "test: add integration test for order processing",
+      "base_sha": "base-test-005",
+      "head_sha": "head-test-005",
+      "changed_files": [
+        "tests/test_orders.py"
+      ],
+      "diff_content": "diff --git a/tests/test_orders.py b/tests/test_orders.py\n--- a/tests/test_orders.py\n+++ b/tests/test_orders.py\n@@ -20,4 +20,7 @@\n def test_process_order():\n+    # Smoke test runs pipeline but asserts nothing about output or state\n+    processor = OrderProcessor()\n+    processor.process({'order_id': '123', 'amount': 99.0})\n",
+      "split": "development",
+      "metadata": {
+        "domain": "test_gap",
+        "archetype": "test_without_assertion"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-test-005",
+          "category": "test_gap",
+          "severity": "low",
+          "file_path": "tests/test_orders.py",
+          "line_range": [21, 24],
+          "summary": "test_process_order invokes the order processor but contains no assertions to verify order outcome or state changes.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Missing test assertion / smoke test without behavioral verification. Calibrates to low severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-006-holdout-correctness-crash",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "fix: retrieve first matching record from search results",
+      "base_sha": "base-holdout-006",
+      "head_sha": "head-holdout-006",
+      "changed_files": [
+        "src/search/query.py"
+      ],
+      "diff_content": "diff --git a/src/search/query.py b/src/search/query.py\n--- a/src/search/query.py\n+++ b/src/search/query.py\n@@ -15,3 +15,6 @@\n def get_top_result(results: list[dict]) -> dict:\n-    return {}\n+    # Crashes with IndexError on empty results list\n+    return results[0]\n",
+      "split": "holdout",
+      "metadata": {
+        "domain": "correctness",
+        "archetype": "empty_input_index_error"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-holdout-006",
+          "category": "correctness",
+          "severity": "high",
+          "file_path": "src/search/query.py",
+          "line_range": [16, 18],
+          "summary": "Direct indexing results[0] raises IndexError if results is empty.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Runtime crash defect on empty search results. Calibrates to high severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-007-holdout-security-token",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "feat: generate email verification pin code",
+      "base_sha": "base-holdout-007",
+      "head_sha": "head-holdout-007",
+      "changed_files": [
+        "src/auth/verification.py"
+      ],
+      "diff_content": "diff --git a/src/auth/verification.py b/src/auth/verification.py\n--- a/src/auth/verification.py\n+++ b/src/auth/verification.py\n@@ -8,3 +8,6 @@\n+import random\n+\n def generate_email_pin() -> str:\n-    return \"123456\"\n+    # Predictable pseudo-random 6-digit verification PIN\n+    return str(random.randint(100000, 999999))\n",
+      "split": "holdout",
+      "metadata": {
+        "domain": "security",
+        "archetype": "insecure_prng_pin"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-holdout-007",
+          "category": "security",
+          "severity": "high",
+          "file_path": "src/auth/verification.py",
+          "line_range": [10, 13],
+          "summary": "random.randint is not cryptographically secure for generating authentication/verification PINs.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Predictable PIN generator in authentication flow. Calibrates to high severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-008-holdout-quality-mutable-default",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "feat: initialize configuration with custom options",
+      "base_sha": "base-holdout-008",
+      "head_sha": "head-holdout-008",
+      "changed_files": [
+        "src/config/options.py"
+      ],
+      "diff_content": "diff --git a/src/config/options.py b/src/config/options.py\n--- a/src/config/options.py\n+++ b/src/config/options.py\n@@ -7,3 +7,6 @@\n-def setup_options(options=None):\n-    pass\n+def setup_options(env: str, overrides: dict = {}) -> dict:\n+    # Mutable default dict retained across setup calls\n+    overrides[\"env\"] = env\n+    return overrides\n",
+      "split": "holdout",
+      "metadata": {
+        "domain": "quality",
+        "archetype": "mutable_default_dict"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-holdout-008",
+          "category": "quality_defect",
+          "severity": "medium",
+          "file_path": "src/config/options.py",
+          "line_range": [7, 11],
+          "summary": "Mutable default argument overrides: dict = {} retains mutated state across calls.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Mutable default dict argument. Calibrated to medium severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-009-holdout-docs-contradiction",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "docs: document rate limit headers in webhook receiver",
+      "base_sha": "base-holdout-009",
+      "head_sha": "head-holdout-009",
+      "changed_files": [
+        "src/webhooks/receiver.py"
+      ],
+      "diff_content": "diff --git a/src/webhooks/receiver.py b/src/webhooks/receiver.py\n--- a/src/webhooks/receiver.py\n+++ b/src/webhooks/receiver.py\n@@ -20,5 +20,6 @@\n def parse_rate_limits(headers: dict[str, str]) -> int:\n     \"\"\"Parse rate limit remaining from headers.\n \n-    Returns -1 when X-RateLimit-Remaining is absent.\n+    Returns 0 when X-RateLimit-Remaining is absent.\n     \"\"\"\n     val = headers.get(\"X-RateLimit-Remaining\")\n     return int(val) if val is not None else -1\n",
+      "split": "holdout",
+      "metadata": {
+        "domain": "documentation",
+        "archetype": "doc_header_return_mismatch"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-holdout-009",
+          "category": "documentation",
+          "severity": "low",
+          "file_path": "src/webhooks/receiver.py",
+          "line_range": [21, 25],
+          "summary": "Docstring states return 0 when absent, but code returns -1.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Documentation discrepancy on fallback return value. Calibrated to low severity."
+        }
+      ]
+    },
+    {
+      "case_id": "golden-010-holdout-tests-smoke-no-assert",
+      "repository_id": "Ayush-Kant/PR-Review-Agent",
+      "title": "test: add payment dispatch smoke test",
+      "base_sha": "base-holdout-010",
+      "head_sha": "head-holdout-010",
+      "changed_files": [
+        "tests/test_payments.py"
+      ],
+      "diff_content": "diff --git a/tests/test_payments.py b/tests/test_payments.py\n--- a/tests/test_payments.py\n+++ b/tests/test_payments.py\n@@ -10,3 +10,5 @@\n def test_payment_dispatch():\n+    # Dispatches payment call but never asserts status or transaction ID\n+    dispatch_payment(account_id=\"acc_1\", amount=500)\n",
+      "split": "holdout",
+      "metadata": {
+        "domain": "test_gap",
+        "archetype": "test_without_assertion"
+      },
+      "expected_findings": [
+        {
+          "finding_id": "exp-holdout-010",
+          "category": "test_gap",
+          "severity": "low",
+          "file_path": "tests/test_payments.py",
+          "line_range": [11, 13],
+          "summary": "test_payment_dispatch calls dispatch_payment without asserting payment completion or return payload.",
+          "is_required": true,
+          "line_tolerance": 2,
+          "severity_tolerance": 1,
+          "notes": "Missing test assertion. Calibrated to low severity."
+        }
+      ]
+    }
+  ]
+}

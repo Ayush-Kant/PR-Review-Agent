@@ -1,0 +1,13 @@
+{
+  "task": "quality-calibration-golden-benchmark",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "d11fa678-759a-4fad-b65d-3b7669d00c71",
+  "human": "Ayush Kant",
+  "reason": "Verified: calibration does not suppress real security/correctness findings, raw severity remains traceable, calibrated severity is deterministic, HITL behavior preserved, auto-pub cannot be bypassed, evaluator matching is sound, golden data contains zero secrets, no scope creep.",
+  "observed_at": "2026-09-16T13:40:14.323Z",
+  "source_hash": "4047f5cd97915c69fb686742d6fd0ca6d4fc33fe143d2b3a4594c97819241b37",
+  "config_hash": "ec1219c56a946c5fd25ad116197391ca76e28e2b5bdeeede05d4e2e8bfac95ae",
+  "reviewed_proofs": "3a4a72ff01d27aa3c0a775facfce8b284c71307b5feb484a294a90fc19491677",
+  "hash": "6938e4226003b25649454bdf460b08dbb479c1032050e1faa329ea64591e85eb"
+}

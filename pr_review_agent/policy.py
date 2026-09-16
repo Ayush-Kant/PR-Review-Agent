@@ -115,6 +115,17 @@ class CanonicalFinding:
     policy_version: str = "v1"
     delivery_id: str = ""
     run_id: str = ""
+    raw_severity: str = ""
+    calibrated_severity: str = ""
+    calibration_rule: str = ""
+    calibration_reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.raw_severity:
+            object.__setattr__(self, "raw_severity", self.severity)
+        if not self.calibrated_severity:
+            object.__setattr__(self, "calibrated_severity", self.severity)
+
 
 
 @dataclass(frozen=True)
@@ -202,6 +213,218 @@ def compute_defect_fingerprint(text: str) -> str:
         cleaned = re.sub(r"[^a-z0-9]", "_", (text or "").lower().strip())
         return cleaned[:32] or "defect"
     return "_".join(tokens[:8])
+
+
+class SeverityCalibrator:
+    """Deterministic, auditable calibration layer between raw model severity and policy severity."""
+
+    @classmethod
+    def calibrate(
+        cls,
+        *,
+        raw_severity: str,
+        category: str,
+        summary: str,
+        rationale: str,
+        contributing_specialists: Sequence[str] = (),
+    ) -> tuple[str, str, str]:
+        """Calibrate raw model severity based on category family, defect pattern, and evidence.
+
+        Returns:
+            (calibrated_severity, calibration_rule, calibration_reason)
+        """
+        raw_sev = (raw_severity or "medium").strip().lower()
+        if raw_sev not in ("critical", "high", "blocking", "medium", "low", "info"):
+            raw_sev = "medium"
+        norm_fam = normalize_category_family(category)
+        text = f"{summary} {rationale}".lower()
+
+        # 1. CRITICAL checks: reserve critical for catastrophic security or unrecoverable data loss
+        if raw_sev in ("critical", "blocking"):
+            is_catastrophic_sec = norm_fam == "security" and any(
+                term in text for term in (
+                    "remote code execution", "rce", "sql injection", "command injection",
+                    "hardcoded private key", "arbitrary code execution"
+                )
+            )
+            is_data_loss = any(term in text for term in ("data loss", "data corruption", "unrecoverable"))
+            if is_catastrophic_sec:
+                return ("critical", "critical_security_catastrophic", "Verified catastrophic security impact; critical severity preserved")
+            if is_data_loss:
+                return ("critical", "critical_data_loss", "Verified catastrophic data loss risk; critical severity preserved")
+            # If not catastrophic, normalize down to high
+            return ("high", "critical_capped_to_high", "Critical severity requires catastrophic compromise evidence; calibrated to high")
+
+        # 2. DOCUMENTATION: non-executable, cannot directly cause runtime crash
+        if norm_fam == "documentation":
+            is_material_contradiction = any(
+                term in text for term in (
+                    "contradict", "incorrectly states", "claims safe", "claims", "mismatch",
+                    "wrong return", "wrong parameter", "doc contradiction", "inconsistent"
+                )
+            )
+            if is_material_contradiction:
+                return (
+                    "medium",
+                    "doc_material_contradiction_medium",
+                    "Documentation materially contradicts runtime code behavior; calibrated to medium severity",
+                )
+            if raw_sev == "high":
+                return (
+                    "low",
+                    "doc_high_capped_to_low",
+                    "Documentation defect cannot cause direct runtime failure; calibrated from high down to low",
+                )
+            if raw_sev == "medium":
+                return (
+                    "medium",
+                    "doc_medium_preserved",
+                    "Documentation discrepancy preserved as medium severity",
+                )
+            return (
+                "low",
+                "doc_standard_low",
+                "Documentation improvement / clarification calibrated to low severity",
+            )
+
+        # 3. QUALITY / MAINTAINABILITY / CORRECTNESS
+        if norm_fam == "quality_defect":
+            # Check for mutable default argument pattern
+            is_mutable_default = any(
+                term in text for term in (
+                    "mutable default", "default argument", "list = []", "dict = {}", "default parameter"
+                )
+            )
+            if is_mutable_default:
+                return (
+                    "medium",
+                    "quality_mutable_default_medium",
+                    "Mutable default argument is a quality/anti-pattern defect; calibrated to medium severity",
+                )
+
+            # Check for non-critical code smells
+            is_code_smell = any(
+                term in text for term in (
+                    "code smell", "dead code", "unused", "naming", "refactor",
+                    "style", "formatting", "complexity", "duplicate code"
+                )
+            )
+            if is_code_smell:
+                if raw_sev in ("high", "critical"):
+                    return (
+                        "medium",
+                        "quality_smell_capped_medium",
+                        "Code smell / maintainability issue cannot be high severity; calibrated down to medium",
+                    )
+                return (
+                    raw_sev if raw_sev in ("medium", "low", "info") else "low",
+                    "quality_smell_preserved",
+                    f"Code quality smell preserved as {raw_sev}",
+                )
+
+            # Check for genuine runtime crashes / unhandled exceptions
+            is_runtime_crash = any(
+                term in text for term in (
+                    "zerodivisionerror", "division by zero", "nullpointer", "unhandled exception",
+                    "raises ", "crash", "indexerror", "keyerror", "attributeerror", "typeerror",
+                    "infinite loop", "deadlock", "memory leak", "resource leak"
+                )
+            )
+            if is_runtime_crash:
+                if raw_sev in ("high", "critical"):
+                    return (
+                        "high",
+                        "correctness_runtime_crash_high",
+                        "Genuine runtime crash/unhandled exception constitutes high severity correctness defect",
+                    )
+                return (
+                    "medium",
+                    "correctness_runtime_crash_medium",
+                    "Runtime error under specific conditions preserved as medium severity",
+                )
+
+            # General correctness / defect: if raw is high, preserve high
+            if raw_sev == "high":
+                return ("high", "correctness_high_preserved", "Correctness defect preserved as high severity")
+
+            return (raw_sev, "quality_preserved", f"Quality defect preserved as {raw_sev}")
+
+        # 4. TEST GAP
+        if norm_fam == "test_gap":
+            is_ineffective_assertion = any(
+                term in text for term in (
+                    "smoke test", "ineffective assertion", "no assertion", "useless test",
+                    "assert true", "tautological", "does not verify output"
+                )
+            )
+            if is_ineffective_assertion:
+                return (
+                    "low",
+                    "test_gap_ineffective_assertion_low",
+                    "Smoke test lacking behavioral assertions; calibrated to low severity",
+                )
+
+            is_critical_gap = any(
+                term in text for term in (
+                    "critical security", "auth test", "safety critical", "authentication boundary"
+                )
+            )
+            if is_critical_gap and raw_sev == "high":
+                return (
+                    "high",
+                    "test_gap_critical_boundary_high",
+                    "Missing test for critical security/safety boundary; high severity preserved",
+                )
+
+            if raw_sev in ("high", "critical"):
+                return (
+                    "medium",
+                    "test_gap_high_capped_to_medium",
+                    "Missing test coverage is quality risk; calibrated from high down to medium",
+                )
+            if raw_sev == "medium":
+                return ("medium", "test_gap_medium_preserved", "Test gap preserved as medium severity")
+            return ("low", "test_gap_low_preserved", "Minor test gap preserved as low severity")
+
+        # 5. SECURITY
+        if norm_fam == "security":
+            is_security_context = any(
+                term in text for term in (
+                    "password", "token", "secret", "reset", "session", "auth", "csrf",
+                    "credential", "crypto", "encryption", "privilege", "injection", "rce", "cwe",
+                    "tamper", "leak", "authorization", "bypass"
+                )
+            )
+            is_benign_randomness = any(
+                term in text for term in (
+                    "ui badge", "cosmetic", "display", "sample", "color", "non-security", "benign"
+                )
+            )
+            if is_benign_randomness:
+                return (
+                    "low",
+                    "security_benign_context_low",
+                    "Non-security context with cosmetic/benign randomness; calibrated down to low",
+                )
+            if is_security_context:
+                if raw_sev in ("high", "critical"):
+                    return (
+                        "high" if raw_sev == "high" else "critical",
+                        "security_sensitive_context_high",
+                        "Verified security-sensitive context; high/critical severity preserved",
+                    )
+                return ("medium", "security_sensitive_context_medium", "Security finding in sensitive context preserved as medium")
+            # Ambiguous security context lacking verified sensitive evidence:
+            if raw_sev in ("high", "critical"):
+                return (
+                    "medium",
+                    "security_ambiguous_capped_medium",
+                    "Security finding lacking verified sensitive context; calibrated down to medium pending review",
+                )
+            return (raw_sev, "security_preserved", f"Security finding preserved as {raw_sev}")
+
+        # Default fallback
+        return (raw_sev, "default_preserved", f"Severity preserved as {raw_sev}")
 
 
 class FindingAggregator:
@@ -337,7 +560,7 @@ class FindingAggregator:
             reverse=True,
         )
         top = cluster_sorted[0]
-        merged_severity = top.severity.lower()
+        raw_severity = top.severity.lower()
 
         # Merged category preserves original category of top candidate
         merged_category = top.category.lower()
@@ -383,12 +606,21 @@ class FindingAggregator:
             f"on {file_path}:{line_range[0]}-{line_range[1]}"
         )
 
+        # Deterministic severity calibration
+        calibrated_sev, cal_rule, cal_reason = SeverityCalibrator.calibrate(
+            raw_severity=raw_severity,
+            category=merged_category,
+            summary=top.summary,
+            rationale=top.rationale,
+            contributing_specialists=contributing_specs,
+        )
+
         return CanonicalFinding(
             canonical_id=canonical_id,
             repository_id=repository_id,
             head_sha=head_sha,
             category=merged_category,
-            severity=merged_severity,
+            severity=calibrated_sev,
             confidence=merged_confidence,
             summary=top.summary,
             rationale=top.rationale,
@@ -401,6 +633,10 @@ class FindingAggregator:
             merge_rationale=merge_rationale,
             delivery_id=delivery_id,
             run_id=run_id,
+            raw_severity=raw_severity,
+            calibrated_severity=calibrated_sev,
+            calibration_rule=cal_rule,
+            calibration_reason=cal_reason,
         )
 
 
@@ -516,6 +752,10 @@ class ReviewPolicyEngine:
             policy_version=self.policy_version,
             delivery_id=finding.delivery_id,
             run_id=finding.run_id,
+            raw_severity=finding.raw_severity,
+            calibrated_severity=finding.calibrated_severity,
+            calibration_rule=finding.calibration_rule,
+            calibration_reason=finding.calibration_reason,
         )
 
 

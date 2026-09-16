@@ -153,10 +153,12 @@ class LLMSpecialistAdapter:
             retrieved_evidence=spec_input.retrieved_evidence,
         )
 
-        security_guidelines = ""
-        if spec_input.specialist_type == SpecialistType.SECURITY or specialist_role.lower() == "security":
-            security_guidelines = (
+        specialist_guidelines = ""
+        role_lower = specialist_role.lower()
+        if spec_input.specialist_type == SpecialistType.SECURITY or role_lower == "security":
+            specialist_guidelines = (
                 "\nSecurity Evaluation Calibration:\n"
+                "- Severity must reflect verified exploitability, exposure, and realistic threat impact.\n"
                 "- Generic use of random, non-cryptographic hashing, or debug logging is NOT automatically a security vulnerability.\n"
                 "- A security finding requires evidence that the behavior is security-sensitive in context.\n"
                 "- For randomness specifically, classify it as a security issue only when the code path is used for something security-sensitive such as:\n"
@@ -165,11 +167,38 @@ class LLMSpecialistAdapter:
                 "- When the context is ambiguous, prefer omission or a lower-severity informational/quality observation rather than an unsupported security claim.\n"
                 "- Never suppress a genuine security issue when surrounding code/evidence establishes security-sensitive use.\n"
             )
+        elif spec_input.specialist_type == SpecialistType.QUALITY or role_lower == "quality":
+            specialist_guidelines = (
+                "\nQuality & Correctness Evaluation Calibration:\n"
+                "- Severity must reflect actual runtime effect, crash potential, data corruption, and blast radius.\n"
+                "- High severity is reserved for genuine, reproducible runtime crashes (e.g. unhandled ZeroDivisionError, null pointer dereference, syntax error, unhandled exception), memory exhaustion, or data loss.\n"
+                "- Do NOT treat every code smell or antipattern as HIGH. Antipatterns such as mutable default arguments, poor variable naming, redundancy, or suboptimal complexity are medium or low severity.\n"
+                "- Do NOT inflate severity merely because a defect sounds important. If a defect requires unusual or non-production conditions to trigger, classify it as medium or low.\n"
+                "- When reporting an issue, ground the rationale in concrete runtime consequences observable in the code or diff.\n"
+            )
+        elif spec_input.specialist_type == SpecialistType.TESTS or role_lower == "tests":
+            specialist_guidelines = (
+                "\nTest Gap Evaluation Calibration:\n"
+                "- Severity must reflect actual regression risk and the criticality of the untested logic.\n"
+                "- Missing tests for standard functions, edge conditions, or new functionality are normally medium or low severity.\n"
+                "- Low severity applies to ineffective assertions, smoke tests that only exercise execution without validating state, or minor edge cases.\n"
+                "- Do NOT treat every missing test as HIGH. High severity for test gaps is strictly reserved for completely untested mission-critical safety or security authorization boundaries.\n"
+                "- Focus on practical gaps that could allow undetected regressions in modified code.\n"
+            )
+        elif spec_input.specialist_type == SpecialistType.DOCUMENTATION or role_lower == "documentation":
+            specialist_guidelines = (
+                "\nDocumentation Evaluation Calibration:\n"
+                "- Severity must reflect documentation impact on developers and consumers.\n"
+                "- Documentation is non-executable and cannot directly crash running systems; NEVER classify documentation findings as HIGH severity.\n"
+                "- Medium severity is reserved for material contradictions where the documentation explicitly misleads consumers about runtime behavior, parameter types, or return values.\n"
+                "- Low or info severity applies to typographical errors, formatting issues, missing optional docstrings, or general clarity enhancements.\n"
+                "- Do NOT treat minor wording differences as high-priority defects.\n"
+            )
 
         system_prompt = (
             f"You are a specialist code review agent focusing exclusively on {specialist_role.upper()}.\n"
             f"Instructions:\n{spec_input.instructions}\n"
-            f"{security_guidelines}\n"
+            f"{specialist_guidelines}\n"
             "Output Requirement:\n"
             "You MUST respond ONLY with a valid JSON object adhering to the following schema:\n"
             "{\n"

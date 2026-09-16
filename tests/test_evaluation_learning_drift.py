@@ -12,6 +12,7 @@ Covers:
 
 from __future__ import annotations
 
+from pathlib import Path
 import sqlite3
 import time
 import pytest
@@ -35,6 +36,9 @@ from pr_review_agent.evaluation import (
     PromotionGateEvaluator,
     PromotionGateResult,
     RegressionGateConfig,
+    SEVERITY_TIERS,
+    compute_severity_distance,
+    load_golden_dataset,
 )
 from pr_review_agent.orchestration import CandidateFinding, SpecialistType
 from pr_review_agent.security import SecretLeakageScanner
@@ -937,3 +941,249 @@ def test_secret_scanning_rejects_secret_in_golden_pr_fields() -> None:
                 ),
             ),
         )
+
+
+# --- Category Family Normalization, Severity Distance, and Golden Benchmark Tests ---
+
+
+def test_evaluator_category_family_normalization() -> None:
+    """EvaluationRunner._is_finding_match matches across aliases within the same category family."""
+    runner = EvaluationRunner()
+
+    # 1. 'code_smell' and 'maintainability' match expected 'quality_defect'
+    exp_quality = GoldenFinding(
+        finding_id="exp-q",
+        category="quality_defect",
+        severity="medium",
+        file_path="src/main.py",
+        line_range=(10, 20),
+    )
+    cand_smell = _make_sample_candidate(category="code_smell", severity="medium")
+    cand_maint = _make_sample_candidate(category="maintainability", severity="medium")
+    cand_sec = _make_sample_candidate(category="security", severity="medium")
+
+    assert runner._is_finding_match(exp_quality, cand_smell) is True
+    assert runner._is_finding_match(exp_quality, cand_maint) is True
+    assert runner._is_finding_match(exp_quality, cand_sec) is False
+
+    # 2. 'docstring' matches expected 'documentation'
+    exp_doc = GoldenFinding(
+        finding_id="exp-d",
+        category="documentation",
+        severity="low",
+        file_path="src/main.py",
+        line_range=(10, 20),
+    )
+    cand_docstring = _make_sample_candidate(category="docstring", severity="low")
+    assert runner._is_finding_match(exp_doc, cand_docstring) is True
+
+
+def test_severity_distance_computation() -> None:
+    """compute_severity_distance computes deterministic distance between ordered severity tiers."""
+    assert compute_severity_distance("medium", "medium") == 0
+    assert compute_severity_distance("high", "medium") == 1
+    assert compute_severity_distance("medium", "high") == 1
+    assert compute_severity_distance("critical", "info") == 4
+    assert compute_severity_distance("low", "critical") == 3
+
+
+def test_evaluation_case_and_dataset_severity_metrics() -> None:
+    """EvaluationRunner tracks exact match rate, mean distance, over/under rates."""
+    runner = EvaluationRunner()
+
+    case = GoldenPRCase(
+        case_id="case-sev-metrics",
+        repository_id="owner/repo",
+        expected_findings=(
+            GoldenFinding(
+                finding_id="exp-1",
+                category="correctness",
+                severity="medium",
+                file_path="src/app.py",
+                line_range=(10, 15),
+                severity_tolerance=1,
+            ),
+            GoldenFinding(
+                finding_id="exp-2",
+                category="quality",
+                severity="medium",
+                file_path="src/app.py",
+                line_range=(20, 25),
+                severity_tolerance=1,
+            ),
+            GoldenFinding(
+                finding_id="exp-3",
+                category="documentation",
+                severity="low",
+                file_path="src/app.py",
+                line_range=(30, 35),
+                severity_tolerance=1,
+            ),
+        ),
+    )
+
+    # Candidate 1: Exact match (medium vs medium) -> dist=0
+    # Candidate 2: Over-severity by 1 tier (high vs medium) -> dist=1, over=1
+    # Candidate 3: Over-severity by 1 tier (medium vs low) -> dist=1, over=1
+    c1 = CandidateFinding(
+        finding_id="c-1",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="correctness",
+        severity="medium",
+        confidence=0.9,
+        summary="C1",
+        rationale="R1",
+        file_path="src/app.py",
+        line_range=(10, 15),
+    )
+    c2 = CandidateFinding(
+        finding_id="c-2",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.QUALITY,
+        category="quality",
+        severity="high",
+        confidence=0.9,
+        summary="C2",
+        rationale="R2",
+        file_path="src/app.py",
+        line_range=(20, 25),
+    )
+    c3 = CandidateFinding(
+        finding_id="c-3",
+        correlation_id="corr-1",
+        specialist_type=SpecialistType.DOCUMENTATION,
+        category="documentation",
+        severity="medium",
+        confidence=0.9,
+        summary="C3",
+        rationale="R3",
+        file_path="src/app.py",
+        line_range=(30, 35),
+    )
+
+    res = runner.evaluate_case(case, [c1, c2, c3])
+    assert res.true_positives == 3
+    assert res.false_positives == 0
+    assert res.false_negatives == 0
+    assert res.exact_severity_matches == 1
+    assert res.one_tier_deviations == 2
+    assert res.major_deviations == 0
+    assert res.severity_over_count == 2
+    assert res.severity_under_count == 0
+    assert res.total_severity_distance == 2
+
+    # In dataset evaluation
+    dataset = GoldenPRDataset(
+        dataset_id="ds-test",
+        version="1.0.0",
+        cases=(case,),
+    )
+    metrics = runner.evaluate_dataset(dataset, {case.case_id: [c1, c2, c3]})
+    assert metrics.precision == 1.0
+    assert metrics.recall == 1.0
+    assert metrics.severity_exact_match_rate == round(1 / 3, 4)
+    assert metrics.mean_severity_distance == round(2 / 3, 4)
+    assert metrics.over_severity_rate == round(2 / 3, 4)
+    assert metrics.under_severity_rate == 0.0
+    assert metrics.one_tier_deviation_rate == round(2 / 3, 4)
+
+
+def test_promotion_gate_severity_metrics_enforcement() -> None:
+    """PromotionGateEvaluator blocks candidates violating severity exact match, distance, or over/under thresholds."""
+    evaluator = PromotionGateEvaluator()
+
+    base_metrics = EvaluationMetrics(
+        split=DatasetSplit.HOLDOUT,
+        total_cases=1,
+        expected_required_count=2,
+        candidate_findings_count=2,
+        true_positives=2,
+        false_positives=0,
+        false_negatives=0,
+        precision=1.0,
+        recall=1.0,
+        f1_score=1.0,
+        critical_findings_expected=0,
+        critical_findings_detected=0,
+        critical_finding_recall=1.0,
+        severity_exact_match_rate=0.75,
+        mean_severity_distance=0.35,
+        over_severity_rate=0.25,
+        under_severity_rate=0.0,
+    )
+
+    # 1. Satisfied thresholds -> PASS
+    config_pass = RegressionGateConfig(
+        min_f1=0.80,
+        min_severity_exact_match_rate=0.70,
+        max_mean_severity_distance=0.50,
+        max_over_severity_rate=0.30,
+    )
+    res_pass = evaluator.evaluate_gate("v2.0", base_metrics, config_pass)
+    assert res_pass.passed is True
+    assert len(res_pass.failed_gates) == 0
+
+    # 2. Strict exact match threshold -> FAIL
+    config_fail_exact = RegressionGateConfig(min_severity_exact_match_rate=0.90)
+    res_fail_exact = evaluator.evaluate_gate("v2.0", base_metrics, config_fail_exact)
+    assert res_fail_exact.passed is False
+    assert "min_severity_exact_match_rate" in res_fail_exact.failed_gates
+
+    # 3. Strict max distance threshold -> FAIL
+    config_fail_dist = RegressionGateConfig(max_mean_severity_distance=0.20)
+    res_fail_dist = evaluator.evaluate_gate("v2.0", base_metrics, config_fail_dist)
+    assert res_fail_dist.passed is False
+    assert "max_mean_severity_distance" in res_fail_dist.failed_gates
+
+    # 4. Strict max over-severity threshold -> FAIL
+    config_fail_over = RegressionGateConfig(max_over_severity_rate=0.10)
+    res_fail_over = evaluator.evaluate_gate("v2.0", base_metrics, config_fail_over)
+    assert res_fail_over.passed is False
+    assert "max_over_severity_rate" in res_fail_over.failed_gates
+
+
+def test_load_golden_dataset_schema_and_security_validation() -> None:
+    """load_golden_dataset parses golden_prs_v1.json and ensures zero secrets."""
+    dataset = load_golden_dataset("data/golden_prs_v1.json")
+    assert dataset.dataset_id == "golden_prs_v1"
+    assert dataset.version == "1.0.0"
+    assert len(dataset.cases) >= 5
+
+    dev_cases = dataset.get_cases(DatasetSplit.DEVELOPMENT)
+    assert len(dev_cases) == 5
+
+    archetypes = {c.metadata.get("archetype") for c in dev_cases}
+    assert "empty_input_runtime_crash" in archetypes
+    assert "insecure_prng_auth_token" in archetypes
+    assert "mutable_default_argument" in archetypes
+    assert "docstring_contradicts_implementation" in archetypes
+    assert "test_without_assertion" in archetypes
+
+    # Ensure zero secrets in file
+    scanner = SecretLeakageScanner()
+    content = Path("data/golden_prs_v1.json").read_text(encoding="utf-8")
+    scan_res = scanner.scan_text(content)
+    assert scan_res.has_secret is False
+    assert len(scan_res.matches) == 0
+
+
+def test_offline_golden_benchmark_script_execution() -> None:
+    """scripts/evaluate_golden.py runs offline benchmark and passes on both dev and holdout splits."""
+    from scripts.evaluate_golden import run_evaluation
+
+    # Development split run
+    dev_status = run_evaluation(
+        dataset_path="data/golden_prs_v1.json",
+        split_str="development",
+        run_gate=False,
+    )
+    assert dev_status == 0
+
+    # Holdout split run with regression gate
+    holdout_status = run_evaluation(
+        dataset_path="data/golden_prs_v1.json",
+        split_str="holdout",
+        run_gate=True,
+    )
+    assert holdout_status == 0
