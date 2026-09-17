@@ -74,10 +74,16 @@ class WebhookIngressHandler:
             )
 
         if result.status == "duplicate":
-            return JSONResponse(
-                {"status": "duplicate", "delivery_id": result.delivery_id},
-                status_code=200,
-            )
+            existing_job = None
+            if self.job_queue is not None and result.delivery_id:
+                if hasattr(self.job_queue, "get_job_by_delivery"):
+                    existing_job = self.job_queue.get_job_by_delivery(result.delivery_id)
+                elif hasattr(self.job_queue, "get_job"):
+                    existing_job = self.job_queue.get_job(f"job-{result.delivery_id}")
+            resp: dict[str, Any] = {"status": "duplicate", "delivery_id": result.delivery_id}
+            if existing_job is not None:
+                resp["job_id"] = existing_job.job_id
+            return JSONResponse(resp, status_code=200)
 
         # status == "accepted"
         if self.job_queue is None or result.snapshot is None:
@@ -101,9 +107,11 @@ class WebhookIngressHandler:
             else:
                 job = self.job_queue.enqueue(result.snapshot, delivery_id=result.delivery_id)
             job_id = job.job_id
-
-
+            if hasattr(self.webhook_intake, "mark_enqueued") and result.delivery_id:
+                self.webhook_intake.mark_enqueued(result.delivery_id, job_id)
         except Exception as exc:
+            if hasattr(self.webhook_intake, "mark_enqueue_failed") and result.delivery_id:
+                self.webhook_intake.mark_enqueue_failed(result.delivery_id, str(exc))
             return JSONResponse(
                 {
                     "status": "failed",

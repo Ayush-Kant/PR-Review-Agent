@@ -258,25 +258,43 @@ class FakeGitHubClient(GitHubClient):
         ]
 
 
-class GitHubReviewPublisher:
-    """Manages policy-permitted, current-SHA-safe, idempotent publication to GitHub."""
+from typing import Any, Protocol, runtime_checkable
 
-    def __init__(
+
+@runtime_checkable
+class GitHubEffectStoreProtocol(Protocol):
+    """Protocol defining durable persistence and lookup for GitHub publication effects."""
+
+    def get_effect(self, idempotency_key: str) -> dict[str, Any] | None:
+        """Fetch existing publication effect by deterministic idempotency key."""
+        ...
+
+    def record_effect(
         self,
-        connection: sqlite3.Connection,
-        truth_store: ReviewTruthStore,
-        github_client: GitHubClient,
         *,
-        secret_scanner: Any | None = None,
+        idempotency_key: str,
+        repository_id: str,
+        pull_number: int,
+        head_sha: str,
+        canonical_id: str,
+        status: str,
+        review_id: str | None = None,
+        comment_id: str | None = None,
+        html_url: str | None = None,
+        published_inline: bool = False,
+        reason: str | None = None,
+        payload: dict[str, Any] | None = None,
+        now: float | None = None,
     ) -> None:
+        """Persist or update publication effect idempotently."""
+        ...
+
+
+class SQLiteEffectStore(GitHubEffectStoreProtocol):
+    """SQLite-backed effect store preserving existing V1 persistence and DDL."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
-        self.truth_store = truth_store
-        self.github_client = github_client
-        if secret_scanner is None:
-            from pr_review_agent.security import SecretLeakageScanner
-            self.secret_scanner = SecretLeakageScanner()
-        else:
-            self.secret_scanner = secret_scanner
         self._create_schema()
 
     def _create_schema(self) -> None:
@@ -306,6 +324,121 @@ class GitHubReviewPublisher:
                 ON github_review_effects (repository_id, pull_number, canonical_id)
                 """
             )
+
+    def get_effect(self, idempotency_key: str) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            """
+            SELECT idempotency_key, repository_id, pull_number, head_sha,
+                   canonical_id, status, review_id, comment_id, html_url,
+                   published_inline, reason, payload_json, created_at
+            FROM github_review_effects
+            WHERE idempotency_key = ?
+            """,
+            (idempotency_key,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "idempotency_key": row[0],
+            "repository_id": row[1],
+            "pull_number": row[2],
+            "head_sha": row[3],
+            "canonical_id": row[4],
+            "status": row[5],
+            "review_id": row[6],
+            "comment_id": row[7],
+            "html_url": row[8],
+            "published_inline": bool(row[9]),
+            "reason": row[10],
+            "payload": json.loads(row[11]) if row[11] else {},
+            "created_at": float(row[12]),
+        }
+
+    def record_effect(
+        self,
+        *,
+        idempotency_key: str,
+        repository_id: str,
+        pull_number: int,
+        head_sha: str,
+        canonical_id: str,
+        status: str,
+        review_id: str | None = None,
+        comment_id: str | None = None,
+        html_url: str | None = None,
+        published_inline: bool = False,
+        reason: str | None = None,
+        payload: dict[str, Any] | None = None,
+        now: float | None = None,
+    ) -> None:
+        current_time = time.time() if now is None else now
+        payload_json = json.dumps(payload or {}, sort_keys=True)
+        # Prevent regressing an already published effect to non-published status
+        existing = self.get_effect(idempotency_key)
+        if existing and existing.get("status") == "published" and status != "published":
+            return
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT OR REPLACE INTO github_review_effects (
+                    idempotency_key, repository_id, pull_number, head_sha,
+                    canonical_id, status, review_id, comment_id, html_url,
+                    published_inline, reason, payload_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    idempotency_key,
+                    repository_id,
+                    pull_number,
+                    head_sha,
+                    canonical_id,
+                    status,
+                    review_id,
+                    comment_id,
+                    html_url,
+                    1 if published_inline else 0,
+                    reason,
+                    payload_json,
+                    current_time,
+                ),
+            )
+
+
+class GitHubReviewPublisher:
+    """Manages policy-permitted, current-SHA-safe, idempotent publication to GitHub."""
+
+    def __init__(
+        self,
+        connection_or_effect_store: sqlite3.Connection | GitHubEffectStoreProtocol | None = None,
+        truth_store: Any = None,
+        github_client: GitHubClient | None = None,
+        *,
+        secret_scanner: Any | None = None,
+        effect_store: GitHubEffectStoreProtocol | None = None,
+        connection: sqlite3.Connection | None = None,
+    ) -> None:
+        if effect_store is not None:
+            self.effect_store = effect_store
+            self.connection = connection or getattr(effect_store, "connection", None)
+        elif isinstance(connection_or_effect_store, GitHubEffectStoreProtocol) and not isinstance(connection_or_effect_store, sqlite3.Connection):
+            self.effect_store = connection_or_effect_store
+            self.connection = getattr(connection_or_effect_store, "connection", None)
+        elif isinstance(connection_or_effect_store, sqlite3.Connection):
+            self.connection = connection_or_effect_store
+            self.effect_store = SQLiteEffectStore(self.connection)
+        elif connection is not None:
+            self.connection = connection
+            self.effect_store = SQLiteEffectStore(self.connection)
+        else:
+            raise ValueError("GitHubReviewPublisher requires either an effect_store or a sqlite3.Connection")
+
+        self.truth_store = truth_store
+        self.github_client = github_client
+        if secret_scanner is None:
+            from pr_review_agent.security import SecretLeakageScanner
+            self.secret_scanner = SecretLeakageScanner()
+        else:
+            self.secret_scanner = secret_scanner
 
     def compute_idempotency_key(
         self,
@@ -785,34 +918,8 @@ class GitHubReviewPublisher:
 
         return "\n".join(lines)
 
-    def _get_existing_effect(self, idempotency_key: str) -> dict[str, object] | None:
-        row = self.connection.execute(
-            """
-            SELECT idempotency_key, repository_id, pull_number, head_sha,
-                   canonical_id, status, review_id, comment_id, html_url,
-                   published_inline, reason, payload_json, created_at
-            FROM github_review_effects
-            WHERE idempotency_key = ?
-            """,
-            (idempotency_key,),
-        ).fetchone()
-        if not row:
-            return None
-        return {
-            "idempotency_key": row[0],
-            "repository_id": row[1],
-            "pull_number": row[2],
-            "head_sha": row[3],
-            "canonical_id": row[4],
-            "status": row[5],
-            "review_id": row[6],
-            "comment_id": row[7],
-            "html_url": row[8],
-            "published_inline": bool(row[9]),
-            "reason": row[10],
-            "payload": json.loads(row[11]),
-            "created_at": row[12],
-        }
+    def _get_existing_effect(self, idempotency_key: str) -> dict[str, Any] | None:
+        return self.effect_store.get_effect(idempotency_key)
 
     def _record_effect_and_result(
         self,
@@ -828,32 +935,21 @@ class GitHubReviewPublisher:
         published_inline: bool = False,
         now: float,
     ) -> PublicationResult:
-        with self.connection:
-            self.connection.execute(
-                """
-                INSERT OR REPLACE INTO github_review_effects (
-                    idempotency_key, repository_id, pull_number, head_sha,
-                    canonical_id, status, review_id, comment_id, html_url,
-                    published_inline, reason, payload_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    idempotency_key,
-                    finding.repository_id,
-                    pull_number,
-                    finding.head_sha,
-                    finding.canonical_id,
-                    status.value,
-                    review_id,
-                    comment_id,
-                    html_url,
-                    1 if published_inline else 0,
-                    reason,
-                    json.dumps(asdict(finding), sort_keys=True),
-                    now,
-                ),
-            )
-
+        self.effect_store.record_effect(
+            idempotency_key=idempotency_key,
+            repository_id=finding.repository_id,
+            pull_number=pull_number,
+            head_sha=finding.head_sha,
+            canonical_id=finding.canonical_id,
+            status=status.value if hasattr(status, "value") else str(status),
+            review_id=review_id,
+            comment_id=comment_id,
+            html_url=html_url,
+            published_inline=published_inline,
+            reason=reason,
+            payload=asdict(finding),
+            now=now,
+        )
         return PublicationResult(
             status=status,
             idempotency_key=idempotency_key,

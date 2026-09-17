@@ -124,6 +124,10 @@ class RedisCheckpointSaver(
             target_url = redis_url or "redis://127.0.0.1:6379/0"
             self.client = redis.Redis.from_url(target_url, decode_responses=False)
 
+    @property
+    def redis_url(self) -> str:
+        return self._raw_url
+
     def __repr__(self) -> str:
         masked_url = re.sub(r"://([^:@]+):([^@]+)@", r"://\1:***@", self._raw_url) if self._raw_url else "''"
         return f"RedisCheckpointSaver(key_prefix={self.key_prefix!r}, redis_url={masked_url!r}, ttl_seconds={self.ttl_seconds})"

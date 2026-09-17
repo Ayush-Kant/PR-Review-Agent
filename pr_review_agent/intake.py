@@ -87,17 +87,45 @@ class WebhookIntake:
 
         snapshot_json = json.dumps(asdict(snapshot), sort_keys=True, separators=(",", ":"))
         with self.connection:
-            inserted = self.connection.execute(
-                "INSERT OR IGNORE INTO deliveries(delivery_id, state) VALUES (?, 'accepted')",
+            row = self.connection.execute(
+                "SELECT state FROM deliveries WHERE delivery_id = ?",
                 (delivery_id,),
-            ).rowcount
-            if not inserted:
-                return IntakeResult("duplicate", delivery_id)
+            ).fetchone()
+            if row is not None and row[0] in ("accepted", "enqueued"):
+                return IntakeResult("duplicate", delivery_id, snapshot)
             self.connection.execute(
-                "INSERT INTO review_snapshots(delivery_id, snapshot_json) VALUES (?, ?)",
+                "INSERT OR REPLACE INTO deliveries(delivery_id, state) VALUES (?, 'accepted')",
+                (delivery_id,),
+            )
+            self.connection.execute(
+                "INSERT OR REPLACE INTO review_snapshots(delivery_id, snapshot_json) VALUES (?, ?)",
                 (delivery_id, snapshot_json),
             )
         return IntakeResult("accepted", delivery_id, snapshot)
+
+    def mark_enqueued(self, delivery_id: str, job_id: str | None = None) -> None:
+        """Mark delivery as durably enqueued."""
+        with self.connection:
+            self.connection.execute(
+                "UPDATE deliveries SET state = 'enqueued' WHERE delivery_id = ?",
+                (delivery_id,),
+            )
+
+    def mark_enqueue_failed(self, delivery_id: str, error: str | None = None) -> None:
+        """Mark delivery as failed to enqueue, releasing it for safe subsequent retry."""
+        with self.connection:
+            self.connection.execute(
+                "UPDATE deliveries SET state = 'enqueue_failed' WHERE delivery_id = ?",
+                (delivery_id,),
+            )
+
+    def get_delivery_state(self, delivery_id: str) -> str | None:
+        """Return the current recorded state of a delivery."""
+        row = self.connection.execute(
+            "SELECT state FROM deliveries WHERE delivery_id = ?",
+            (delivery_id,),
+        ).fetchone()
+        return row[0] if row else None
 
     def snapshot_is_current(self, delivery_id: str, head_sha: str) -> bool:
         """Return whether a persisted review snapshot still matches a PR head SHA."""

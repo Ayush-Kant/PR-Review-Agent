@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-17T19:43:03.535Z
+- plan approval: Ayush Kant at 2026-09-17T22:26:35.124Z
 
 ## Tasks
 
@@ -182,5 +182,13 @@
 - requirements: NFR-03, FR-03, FR-05, FR-12, FR-14, FR-15, NFR-01
 - scope: not bounded
 - gates: test: python -m pytest tests/test_production_fault_injection.py
+- next: Run the task pre-flight.
+
+### production-runtime-composition — Production runtime composition behind existing contracts
+
+- state/risk: done / medium
+- requirements: FR-02, FR-03, FR-12, FR-15, NFR-03
+- scope: not bounded
+- gates: test: python -m pytest tests/test_production_runtime_composition.py, independent-review: pass
 - next: Run the task pre-flight.
 

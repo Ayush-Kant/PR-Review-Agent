@@ -12,14 +12,32 @@ from typing import Any
 
 from pr_review_agent.adapters.github import GitHubNetworkClient
 from pr_review_agent.adapters.llm import create_specialist_handlers
+from pr_review_agent.adapters.tiger_connection import (
+    TigerConfig,
+    TigerConfigurationError,
+    TigerConnectionManager,
+)
+from pr_review_agent.adapters.tiger_stores import (
+    TigerAuditSpine,
+    TigerCodeMemoryStore,
+    TigerEffectStore,
+    TigerReviewTruthStore,
+)
 from pr_review_agent.github_output import (
     GitHubClient,
+    GitHubEffectStoreProtocol,
     GitHubReviewPublisher,
     PublicationResult,
     PublicationStatus,
+    SQLiteEffectStore,
 )
 from pr_review_agent.intake import ReviewSnapshot
 from pr_review_agent.observability import AuditEvent, AuditSpine
+from pr_review_agent.retrieval import (
+    CodeMemoryStore,
+    CodeMemoryStoreProtocol,
+    HybridRetriever,
+)
 from pr_review_agent.orchestration import (
     CandidateFinding,
     DurableJobQueue,
@@ -115,12 +133,16 @@ class AutonomousReviewWorker:
         config: ServiceConfig,
         connection: sqlite3.Connection | None = None,
         *,
+        tiger_connection_manager: TigerConnectionManager | None = None,
         github_client: GitHubClient | None = None,
         specialist_handlers: Mapping[SpecialistType, SpecialistHandler] | None = None,
         orchestrator: WorkflowEngineProtocol | ReviewOrchestrator | None = None,
         queue: DurableQueueProtocol | DurableJobQueue | None = None,
-        audit_spine: AuditSpine | None = None,
-        truth_store: ReviewTruthStore | None = None,
+        audit_spine: AuditSpine | TigerAuditSpine | None = None,
+        truth_store: ReviewTruthStore | TigerReviewTruthStore | None = None,
+        effect_store: GitHubEffectStoreProtocol | None = None,
+        code_memory_store: CodeMemoryStoreProtocol | None = None,
+        retriever: HybridRetriever | None = None,
         publisher: GitHubReviewPublisher | None = None,
         policy_engine: ReviewPolicyEngine | None = None,
         aggregator: FindingAggregator | None = None,
@@ -130,9 +152,70 @@ class AutonomousReviewWorker:
         self._owns_connection = connection is None
         self.connection = connection or sqlite3.connect(config.database_path, check_same_thread=False)
 
-        self.queue = queue or DurableJobQueue(self.connection)
-        self.audit_spine = audit_spine or AuditSpine(self.connection)
-        self.truth_store = truth_store or ReviewTruthStore(self.connection)
+        # Tiger Connection Manager
+        self.tiger_connection_manager = tiger_connection_manager
+        self._owns_tiger_manager = False
+        if self.tiger_connection_manager is None and getattr(config, "database_backend", "sqlite") == "tiger":
+            if getattr(config, "tiger_database_url", ""):
+                tiger_cfg = TigerConfig.from_url(config.tiger_database_url)
+                self.tiger_connection_manager = TigerConnectionManager(tiger_cfg)
+                self._owns_tiger_manager = True
+
+        # Queue composition
+        if queue is not None:
+            self.queue = queue
+        elif getattr(config, "queue_backend", "sqlite") == "redis" and getattr(config, "redis_url", ""):
+            self.queue = RedisJobQueue(redis_url=config.redis_url)
+        else:
+            self.queue = DurableJobQueue(self.connection)
+
+        # Audit Spine composition
+        if audit_spine is not None:
+            self.audit_spine = audit_spine
+        elif getattr(config, "database_backend", "sqlite") == "tiger":
+            if self.tiger_connection_manager is None:
+                raise TigerConfigurationError("Tiger connection manager is required when database_backend is 'tiger'")
+            self.audit_spine = TigerAuditSpine(self.tiger_connection_manager)
+        else:
+            self.audit_spine = AuditSpine(self.connection)
+
+        self._current_run_context: Any = None
+
+        # Truth Store composition
+        if truth_store is not None:
+            self.truth_store = truth_store
+        elif getattr(config, "database_backend", "sqlite") == "tiger":
+            if self.tiger_connection_manager is None:
+                raise TigerConfigurationError("Tiger connection manager is required when database_backend is 'tiger'")
+            from pr_review_agent.adapters.tiger_stores import ReviewRunContext
+            self.truth_store = TigerReviewTruthStore(
+                self.tiger_connection_manager,
+                run_context_resolver=lambda _: self._current_run_context,
+            )
+        else:
+            self.truth_store = ReviewTruthStore(self.connection)
+
+        # Code Memory Store composition
+        if code_memory_store is not None:
+            self.code_memory_store = code_memory_store
+        elif getattr(config, "database_backend", "sqlite") == "tiger":
+            if self.tiger_connection_manager is None:
+                raise TigerConfigurationError("Tiger connection manager is required when database_backend is 'tiger'")
+            self.code_memory_store = TigerCodeMemoryStore(self.tiger_connection_manager)
+        else:
+            self.code_memory_store = CodeMemoryStore(self.connection)
+
+        self.retriever = retriever or HybridRetriever(self.code_memory_store)
+
+        # Effect Store composition
+        if effect_store is not None:
+            self.effect_store = effect_store
+        elif getattr(config, "database_backend", "sqlite") == "tiger":
+            if self.tiger_connection_manager is None:
+                raise TigerConfigurationError("Tiger connection manager is required when database_backend is 'tiger'")
+            self.effect_store = TigerEffectStore(self.tiger_connection_manager)
+        else:
+            self.effect_store = SQLiteEffectStore(self.connection)
 
         self._owns_github_client = github_client is None
         if github_client is not None:
@@ -144,7 +227,7 @@ class AutonomousReviewWorker:
             )
 
         self.publisher = publisher or GitHubReviewPublisher(
-            self.connection,
+            self.effect_store,
             self.truth_store,
             self.github_client,
         )
@@ -309,6 +392,22 @@ class AutonomousReviewWorker:
                 repository_id=snapshot.repository_id,
                 head_sha=snapshot.head_sha,
             )
+
+            # Contextual run resolution for truth stores requiring parent context
+            try:
+                from pr_review_agent.adapters.tiger_stores import ReviewRunContext
+                self._current_run_context = ReviewRunContext(
+                    run_id=lifecycle_state.run_id,
+                    repository_id=snapshot.repository_id,
+                    pull_number=snapshot.pull_request_number,
+                    head_sha=snapshot.head_sha,
+                    base_sha=snapshot.base_sha,
+                    delivery_id=job.delivery_id,
+                    state="in_progress",
+                    policy_version=snapshot.policy_version,
+                )
+            except Exception:
+                self._current_run_context = None
 
             # Apply ReviewPolicyEngine and record into ReviewTruthStore
             for finding in canonical_findings:
@@ -498,8 +597,10 @@ class AutonomousReviewWorker:
         """Cleanly close underlying resources."""
         if self._owns_github_client and hasattr(self.github_client, "close"):
             self.github_client.close()
-        if self._owns_connection:
+        if self._owns_connection and self.connection is not None:
             self.connection.close()
+        if getattr(self, "_owns_tiger_manager", False) and self.tiger_connection_manager is not None:
+            self.tiger_connection_manager.close()
 
 
 def run_worker(
@@ -536,12 +637,26 @@ async def arq_startup(ctx: dict[str, Any]) -> None:
 
     # Initialize queue if not already injected
     if "queue" not in ctx:
-        redis_url = getattr(config, "redis_url", None) or "redis://127.0.0.1:6379/0"
-        ctx["queue"] = RedisJobQueue(redis_url=redis_url)
+        if getattr(config, "queue_backend", "sqlite") == "redis":
+            redis_url = getattr(config, "redis_url", None) or "redis://127.0.0.1:6379/0"
+            ctx["queue"] = RedisJobQueue(redis_url=redis_url)
+        else:
+            conn = sqlite3.connect(config.database_path, check_same_thread=False)
+            ctx["queue"] = DurableJobQueue(conn)
+
+    # Initialize Tiger connection manager if configured
+    if "tiger_connection_manager" not in ctx and getattr(config, "database_backend", "sqlite") == "tiger":
+        if getattr(config, "tiger_database_url", ""):
+            tiger_cfg = TigerConfig.from_url(config.tiger_database_url)
+            ctx["tiger_connection_manager"] = TigerConnectionManager(tiger_cfg)
 
     # Initialize AutonomousReviewWorker if not already injected
     if "worker" not in ctx:
-        ctx["worker"] = AutonomousReviewWorker(config, queue=ctx["queue"])
+        ctx["worker"] = AutonomousReviewWorker(
+            config,
+            queue=ctx["queue"],
+            tiger_connection_manager=ctx.get("tiger_connection_manager"),
+        )
 
 
 async def arq_shutdown(ctx: dict[str, Any]) -> None:
@@ -552,6 +667,9 @@ async def arq_shutdown(ctx: dict[str, Any]) -> None:
     queue = ctx.get("queue")
     if queue and hasattr(queue, "close"):
         queue.close()
+    tiger_mgr = ctx.get("tiger_connection_manager")
+    if tiger_mgr and hasattr(tiger_mgr, "close"):
+        tiger_mgr.close()
 
 
 def get_redis_settings(config: ServiceConfig | None = None) -> RedisSettings:

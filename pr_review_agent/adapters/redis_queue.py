@@ -111,6 +111,7 @@ class RedisJobQueue(DurableQueueProtocol):
         self.queue_name = queue_name
         self.budget_config = budget_config
         self._owns_client = client is None
+        self.redis_url = redis_url or ""
 
         if client is not None:
             self.client = client
@@ -636,6 +637,14 @@ class RedisJobQueue(DurableQueueProtocol):
         if not data:
             return None
         return self._deserialize_job(data)
+
+    def get_job_by_delivery(self, delivery_id: str) -> ReviewJob | None:
+        """Retrieve a review job by its correlated delivery ID."""
+        delivery_key = self._delivery_key(delivery_id)
+        job_id_val = self.client.get(delivery_key)
+        if not job_id_val:
+            return None
+        return self.get_job(self._to_str(job_id_val))
 
     def get_job_payload(self, job_id: str) -> dict[str, Any]:
         """Retrieve stored snapshot payload json for reconstruction."""

@@ -15,7 +15,7 @@ Load Genesis and official Ponytail full, then run `genesis brief .` for the curr
 Fetch full records with `genesis context . --id ID` only when needed. Do not load project.json or historical proof wholesale.
 Ask the index before reading code: `genesis query . search|scope|callers|callees|impact|path` (`--json` for parsing). Run `genesis query . impact PATH` before editing shared code. Answers are advisory static analysis; `ambiguous` means candidates were not ruled out, so confirm in source.
 Run `genesis serve .` for a live map of the repository when structure is unclear; it reindexes on save and is read-only. Run `genesis index .` if the index is stale and nothing is watching.
-Context fingerprint: 9400ab964780babd24032b524fd638d83f97cdc830afb719f8ececf0207726e2. Use --since only after receiving that full packet; kickoff is not the packet.
+Context fingerprint: ab7e12f01e78c3c14ddcb5d821ceeec1e20acb015ea96b862921ff51c96f074d. Use --since only after receiving that full packet; kickoff is not the packet.
 - DECISION-ca60fdb3: W1-06 Scope Expansion: tests/test_tiger_schema_and_connection.py
 - DECISION-51cf1bfa: W1-06 Scope, Non-Goals, and Adapter Boundary Invariants
 - DECISION-61b6c150: Deferred Production Embedding Model and Vector Index Selection for Tiger Memory

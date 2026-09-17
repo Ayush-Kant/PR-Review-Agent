@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "af84efd16dad5a69c1526427be5ea2c61f49bb90",
-  "sourceHash": "67b4a8c5f452737698f1487e5690f5bbc26c936d1a48e354e93aa1efe455bbbd",
+  "revision": "34c1a0e30ed438635294a34ddd0ff311e40ae15b",
+  "sourceHash": "1b2f9a4e315928eac95e3433c64dfaed53be3ea40a22cafaaddaef0da0a59e80",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -27,7 +27,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "1fcf56069bd6f913e59c4c01fd7e8da446836789196c2dd1f973255152454b2e"
+      "contentHash": "a6c2701ce9931863141897e8b13c344e0211a1b89e15a791d0d123d45af91c61"
     },
     {
       "id": "file:pr_review_agent/adapters/github.py",
@@ -57,7 +57,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "bd81891a7189789b24e31e43ea587bee17b86a661745d3aafe3e1e7d5bff60ec"
+      "contentHash": "508b0f6d7eec108282f1bade86ca48680b64cc2e77e77f86adcca8b963024b09"
     },
     {
       "id": "file:pr_review_agent/adapters/redis_queue.py",
@@ -67,7 +67,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "5cf80443a9881b019ab7ed280824332a67309903ed3974281759ea541c41f9c0"
+      "contentHash": "b62e857a12ce965e851d15b8a1266ec51675708373b38c1532b9076a73cf787d"
     },
     {
       "id": "file:pr_review_agent/adapters/tiger_connection.py",
@@ -97,7 +97,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "bf41fc45c7537ebccc045d95df6f2f984ceab554727581ab367eea41b52f6c60"
+      "contentHash": "d2f1b7dc424794e2409912a2d531d213b0cdf7e509e05ae2a21a236a365789e2"
     },
     {
       "id": "file:pr_review_agent/adapters/webhook_ingress.py",
@@ -107,7 +107,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "a693d83f637a26e150ad3c2adf943c8e363d651972c25cb753dabbf39aa1ca65"
+      "contentHash": "f66342b45e6c5e473da5ab9a7b3c401e0d48d3c70460143422eb5729368ee53b"
     },
     {
       "id": "file:pr_review_agent/cost_controls.py",
@@ -137,7 +137,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "9d50d8077a1b789794792497af369267073ef00023b9463dfdbc69a1aa4de976"
+      "contentHash": "36d359a61f607575e926149a5f9866c8e73496a63fc2e843ec1c126428a33048"
     },
     {
       "id": "file:pr_review_agent/intake.py",
@@ -147,7 +147,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "f01d4eb83d92bd16b67f6bbce175b390ea40fb060820e3fd65e78d9594efe8aa"
+      "contentHash": "4df8c1bf9653c56ca6816f1ff0e6e9685ab87763c2e5a14a3a812a475a4d5f50"
     },
     {
       "id": "file:pr_review_agent/observability.py",
@@ -167,7 +167,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "ecca550b5fdac65810f1be8c2aeb2cb2f3b809440acf305a288fcc379cf67cad"
+      "contentHash": "d2487502985e61afec37e50d14cd2fa28601e102e19c0b8cb9ee2797020a6fad"
     },
     {
       "id": "file:pr_review_agent/policy.py",
@@ -207,7 +207,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "e248189abba958df157fb435cc7f639a15b92b94ac1b70f39124db29411c4579"
+      "contentHash": "af3e6289b118babd40e6004fc2fa5cbe169985ec4b05544cb1a0522f6230fa97"
     },
     {
       "id": "file:pr_review_agent/service_config.py",
@@ -227,37 +227,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "716d993cdb812e14c05fc4454f187f57173719d35b5a7fcad13b6532af7fc88c"
-    },
-    {
-      "id": "file:scratch/analyze_genesis.py",
-      "type": "file",
-      "label": "scratch/analyze_genesis.py",
-      "path": "scratch/analyze_genesis.py",
-      "language": "python",
-      "confidence": 1,
-      "extractor": "filesystem",
-      "contentHash": "2439cec88a09b60c9874572aedce5b540fed08c32c163372b6113c8c70bc0ad0"
-    },
-    {
-      "id": "file:scratch/dump_forensic_report.py",
-      "type": "file",
-      "label": "scratch/dump_forensic_report.py",
-      "path": "scratch/dump_forensic_report.py",
-      "language": "python",
-      "confidence": 1,
-      "extractor": "filesystem",
-      "contentHash": "e44feb145f8016fca6c50713ee38638245d7f38cde40efcbf4b12df0f5f5096b"
-    },
-    {
-      "id": "file:scratch/query_case5.py",
-      "type": "file",
-      "label": "scratch/query_case5.py",
-      "path": "scratch/query_case5.py",
-      "language": "python",
-      "confidence": 1,
-      "extractor": "filesystem",
-      "contentHash": "c1c4af9d628a6e40d8edc590d6d2c852d3ae6e6209f8b9f04458ed01fbc3f5d8"
+      "contentHash": "8d42ef701d44e8afd6627686535ac3ee0865a0c0c80665f9c7c8e1a300863044"
     },
     {
       "id": "file:scripts/evaluate_golden_live.py",
@@ -388,6 +358,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "e6cbc393c4f63755295c9e2aab58a92ad7ccfd2340f4688074adc77ca8927fbc"
+    },
+    {
+      "id": "file:tests/test_production_runtime_composition.py",
+      "type": "file",
+      "label": "tests/test_production_runtime_composition.py",
+      "path": "tests/test_production_runtime_composition.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "fae2768b99112a90be030adcc9949e304372287bf8a8535fa5fcf2e3f5cadb0b"
     },
     {
       "id": "file:tests/test_queue_and_checkpoint_contracts.py",

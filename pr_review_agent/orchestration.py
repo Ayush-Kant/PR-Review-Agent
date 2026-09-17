@@ -294,6 +294,10 @@ class DurableQueueProtocol(Protocol):
         """Retrieve a review job by its durable ID."""
         ...
 
+    def get_job_by_delivery(self, delivery_id: str) -> ReviewJob | None:
+        """Retrieve a review job by its correlated delivery ID."""
+        ...
+
 
 # Forbidden secret-bearing keys in durable workflow checkpoints (Part 4)
 CHECKPOINT_FORBIDDEN_KEYS: frozenset[str] = frozenset({
@@ -636,6 +640,16 @@ class DurableJobQueue:
             updated_at=row[13],
             next_run_at=row[14],
         )
+
+    def get_job_by_delivery(self, delivery_id: str) -> ReviewJob | None:
+        """Retrieve a review job by its correlated delivery ID."""
+        row = self.connection.execute(
+            "SELECT job_id FROM review_jobs WHERE delivery_id = ?",
+            (delivery_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return self.get_job(row[0])
 
 
 class ReviewOrchestrator:

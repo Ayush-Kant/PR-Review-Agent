@@ -36,6 +36,7 @@ from pr_review_agent.policy import (
     ReviewTruthRecord,
     TruthState,
 )
+from pr_review_agent.github_output import GitHubEffectStoreProtocol
 from pr_review_agent.retrieval import CodeChunk, CodeMemoryStoreProtocol
 
 logger = logging.getLogger(__name__)
@@ -1358,3 +1359,124 @@ class TigerAuditSpine:
         # Verify secret redaction
         trace.contains_secrets = _has_unredacted_secrets(asdict(trace))
         return trace
+
+
+class TigerEffectStore(GitHubEffectStoreProtocol):
+    """Tiger Cloud / PostgreSQL production effect store for GitHub publications."""
+
+    def __init__(self, connection_manager: TigerConnectionManager) -> None:
+        self.connection_manager = connection_manager
+
+    def get_effect(self, idempotency_key: str) -> dict[str, Any] | None:
+        """Lookup existing publication effect by deterministic idempotency key."""
+        conn = self.connection_manager.get_connection()
+        try:
+            cur = _execute(
+                conn,
+                """
+                SELECT idempotency_key, repository_id, pull_number, head_sha,
+                       canonical_id, status, review_id, comment_id, html_url,
+                       published_inline, reason, payload, created_at
+                FROM github_review_effects
+                WHERE idempotency_key = %s
+                """,
+                (idempotency_key,),
+            )
+            rows = cur.fetchall() if cur and hasattr(cur, "fetchall") else []
+            if not rows:
+                return None
+            row = rows[0]
+            payload_data = row[11]
+            if isinstance(payload_data, str):
+                try:
+                    payload_data = json.loads(payload_data)
+                except Exception:
+                    payload_data = {}
+            elif not isinstance(payload_data, dict):
+                payload_data = {}
+
+            return {
+                "idempotency_key": row[0],
+                "repository_id": row[1],
+                "pull_number": row[2],
+                "head_sha": row[3],
+                "canonical_id": row[4],
+                "status": row[5],
+                "review_id": row[6],
+                "comment_id": row[7],
+                "html_url": row[8],
+                "published_inline": bool(row[9]),
+                "reason": row[10],
+                "payload": payload_data,
+                "created_at": _parse_timestamp(row[12]),
+            }
+        except Exception:
+            _rollback(conn)
+            raise
+
+    def record_effect(
+        self,
+        *,
+        idempotency_key: str,
+        repository_id: str,
+        pull_number: int,
+        head_sha: str,
+        canonical_id: str,
+        status: str,
+        review_id: str | None = None,
+        comment_id: str | None = None,
+        html_url: str | None = None,
+        published_inline: bool = False,
+        reason: str | None = None,
+        payload: dict[str, Any] | None = None,
+        now: float | None = None,
+    ) -> None:
+        """Persist or update publication effect idempotently.
+
+        Enforces non-regression: a published effect cannot be regressed to non-published status.
+        """
+        conn = self.connection_manager.get_connection()
+        payload_json = json.dumps(payload or {}, sort_keys=True)
+        try:
+            # Prevent regressing an already published effect
+            existing = self.get_effect(idempotency_key)
+            if existing and existing.get("status") == "published" and status != "published":
+                return
+
+            _execute(
+                conn,
+                """
+                INSERT INTO github_review_effects (
+                    idempotency_key, repository_id, pull_number, head_sha,
+                    canonical_id, status, review_id, comment_id, html_url,
+                    published_inline, reason, payload, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (idempotency_key) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    review_id = COALESCE(EXCLUDED.review_id, github_review_effects.review_id),
+                    comment_id = COALESCE(EXCLUDED.comment_id, github_review_effects.comment_id),
+                    html_url = COALESCE(EXCLUDED.html_url, github_review_effects.html_url),
+                    published_inline = EXCLUDED.published_inline,
+                    reason = EXCLUDED.reason,
+                    payload = EXCLUDED.payload
+                WHERE github_review_effects.status != 'published' OR EXCLUDED.status = 'published'
+                """,
+                (
+                    idempotency_key,
+                    repository_id,
+                    pull_number,
+                    head_sha,
+                    canonical_id,
+                    status,
+                    review_id,
+                    comment_id,
+                    html_url,
+                    published_inline,
+                    reason,
+                    payload_json,
+                ),
+            )
+            _commit(conn)
+        except Exception:
+            _rollback(conn)
+            raise
