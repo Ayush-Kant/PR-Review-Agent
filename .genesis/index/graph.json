@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "d64465469985aea0a640076ddeabae1f1f92efc8",
-  "sourceHash": "e22b79940cbb82003412ca7a893017f26dce941df04325bb38065ca79476ae50",
+  "revision": "e3e81103a93dbc706d5b486d96abda4354468088",
+  "sourceHash": "66289907e1d3a5f27ae884553c53a01b776406573c8bff7137394dbe7afabd9f",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -27,7 +27,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "340dd489a3bfdd0d9d59f0acbedd3b2544755276230452f7c0d8981a31b961dc"
+      "contentHash": "f8be9e8bb03a790afe5374ae460f85ad00c6362a3329103df4a49aa81b45ce62"
     },
     {
       "id": "file:pr_review_agent/adapters/github.py",
@@ -68,6 +68,26 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "5cf80443a9881b019ab7ed280824332a67309903ed3974281759ea541c41f9c0"
+    },
+    {
+      "id": "file:pr_review_agent/adapters/tiger_connection.py",
+      "type": "file",
+      "label": "pr_review_agent/adapters/tiger_connection.py",
+      "path": "pr_review_agent/adapters/tiger_connection.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "346c8befca6f920d568258804b99801b407551fcb0bb137b1b0498a0dacfd190"
+    },
+    {
+      "id": "file:pr_review_agent/adapters/tiger_migrations.py",
+      "type": "file",
+      "label": "pr_review_agent/adapters/tiger_migrations.py",
+      "path": "pr_review_agent/adapters/tiger_migrations.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "8dbfbdd4a4f3bcdd6335d2be18e20e0158e83b91e53859cd775b0ba4ee3639ad"
     },
     {
       "id": "file:pr_review_agent/adapters/webhook_ingress.py",
@@ -187,7 +207,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "4b568efa41bf23530c3ae7611ec84650793bb046ca5a12441d6c6c7c756808a8"
+      "contentHash": "67d8c18a802c5cfdfba7e018c2b59f84603af45af198447b4fff7dfca86d366d"
     },
     {
       "id": "file:pr_review_agent/worker.py",
@@ -218,6 +238,26 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "e44feb145f8016fca6c50713ee38638245d7f38cde40efcbf4b12df0f5f5096b"
+    },
+    {
+      "id": "file:scratch/inspect_genesis_tasks.py",
+      "type": "file",
+      "label": "scratch/inspect_genesis_tasks.py",
+      "path": "scratch/inspect_genesis_tasks.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "f43059eb72d1c01b514574dc787bfb4af8f81d8bf1027e929fdc28e00f59252a"
+    },
+    {
+      "id": "file:scratch/print_decisions.py",
+      "type": "file",
+      "label": "scratch/print_decisions.py",
+      "path": "scratch/print_decisions.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "63c4e7bcd154f2af0694bf5073af86534a98753f62eef16de6749ea184257850"
     },
     {
       "id": "file:scratch/query_case5.py",
@@ -408,6 +448,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "85703c96d3bb5076cf2429ac28bdc7caf2b23460db1e8597024fad4f9e8f9286"
+    },
+    {
+      "id": "file:tests/test_tiger_schema_and_connection.py",
+      "type": "file",
+      "label": "tests/test_tiger_schema_and_connection.py",
+      "path": "tests/test_tiger_schema_and_connection.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "b926e5bf96027e16db289defd42b899a644fe3c60b0aa662b6b1f0ff77008813"
     },
     {
       "id": "file:tests/test_webhook_intake.py",

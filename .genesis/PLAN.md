@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-16T22:54:31.134Z
+- plan approval: Ayush Kant at 2026-09-17T06:26:13.452Z
 
 ## Tasks
 
@@ -150,5 +150,13 @@
 - requirements: FR-03
 - scope: not bounded
 - gates: test: python -m pytest tests/test_redis_checkpoint_adapter.py tests/test_queue_and_checkpoint_contracts.py, independent-review: pass
+- next: Run the task pre-flight.
+
+### tiger-cloud-schema-connection-manager — Implement Tiger Cloud Postgres-compatible schema foundation and production-safe connection manager (W1-05)
+
+- state/risk: done / medium
+- requirements: FR-15
+- scope: not bounded
+- gates: test: python -m pytest tests/test_tiger_schema_and_connection.py, independent-review: pass
 - next: Run the task pre-flight.
 

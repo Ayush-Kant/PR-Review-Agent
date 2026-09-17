@@ -33,19 +33,23 @@ class ServiceConfig:
     queue_backend: str = "sqlite"
     redis_url: str = ""
     checkpoint_backend: str = "none"
+    database_backend: str = "sqlite"
+    tiger_database_url: str = ""
 
     def __repr__(self) -> str:
         """Prevent secrets from leaking into logs or representations."""
         masked_redis = "'***'" if self.redis_url else "''"
+        masked_tiger = "'***'" if self.tiger_database_url else "''"
         return (
             f"ServiceConfig(host={self.host!r}, port={self.port}, "
             f"model_provider={self.model_provider!r}, model_name={self.model_name!r}, "
-            f"database_path={self.database_path!r}, authorized_tenant={self.authorized_tenant!r}, "
+            f"database_path={self.database_path!r}, database_backend={self.database_backend!r}, "
+            f"authorized_tenant={self.authorized_tenant!r}, "
             f"authorized_repositories={self.authorized_repositories!r}, "
             f"publish_enabled={self.publish_enabled}, queue_backend={self.queue_backend!r}, "
             f"checkpoint_backend={self.checkpoint_backend!r}, "
-            f"redis_url={masked_redis}, github_token='***', webhook_secret=b'***', "
-            f"api_key='***')"
+            f"redis_url={masked_redis}, tiger_database_url={masked_tiger}, "
+            f"github_token='***', webhook_secret=b'***', api_key='***')"
         )
 
 
@@ -58,6 +62,11 @@ class ServiceConfig:
         registry = secret_registry or RuntimeSecretRegistry()
         if self.github_token:
             registry.register_secret(SecretType.GITHUB_TOKEN, self.github_token)
+        if self.tiger_database_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(self.tiger_database_url)
+            if parsed.password:
+                registry.register_secret(SecretType.TIGERDB_CREDENTIAL, parsed.password)
 
         env_dict = {
             "GITHUB_TOKEN": self.github_token,
@@ -126,6 +135,14 @@ def load_service_config(
         raise ValueError(f"Invalid CHECKPOINT_BACKEND '{checkpoint_backend}'. Must be 'none', 'memory', or 'redis'.")
     redis_url = env_map.get("REDIS_URL", "").strip()
 
+    database_backend = env_map.get("DATABASE_BACKEND", "sqlite").strip().lower()
+    if database_backend not in ("sqlite", "tiger"):
+        raise ValueError(f"Invalid DATABASE_BACKEND '{database_backend}'. Must be 'sqlite' or 'tiger'.")
+    tiger_database_url = (
+        env_map.get("TIGER_DATABASE_URL", "")
+        or env_map.get("TIGER_URL", "")
+    ).strip()
+
     if require_live_credentials:
         if not github_token:
             raise ValueError("Missing required GITHUB_TOKEN in environment.")
@@ -139,6 +156,8 @@ def load_service_config(
             raise ValueError("Missing required GROQ_API_KEY for provider 'groq'.")
         if (queue_backend == "redis" or checkpoint_backend == "redis") and not redis_url:
             raise ValueError("Missing required REDIS_URL when QUEUE_BACKEND or CHECKPOINT_BACKEND is 'redis'.")
+        if database_backend == "tiger" and not tiger_database_url:
+            raise ValueError("Missing required TIGER_DATABASE_URL when DATABASE_BACKEND is 'tiger'.")
 
     api_key = (
         env_map.get("OPENAI_API_KEY", "").strip()
@@ -162,4 +181,6 @@ def load_service_config(
         queue_backend=queue_backend,
         redis_url=redis_url,
         checkpoint_backend=checkpoint_backend,
+        database_backend=database_backend,
+        tiger_database_url=tiger_database_url,
     )

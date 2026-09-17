@@ -8,17 +8,45 @@ from pr_review_agent.adapters.redis_checkpoint import (
     RedisCheckpointSaver,
 )
 from pr_review_agent.adapters.redis_queue import RedisJobQueue, StaleLeaseError
+from pr_review_agent.adapters.tiger_connection import (
+    TigerConfig,
+    TigerConfigurationError,
+    TigerConnectionError,
+    TigerConnectionManager,
+    TigerError,
+    TigerExtensionError,
+    mask_database_url,
+)
+from pr_review_agent.adapters.tiger_migrations import (
+    CapabilityReport,
+    ExtensionInspector,
+    Migration,
+    MigrationError,
+    MigrationRunner,
+)
 from pr_review_agent.adapters.webhook_ingress import create_webhook_app
 
 __all__ = [
+    "CapabilityReport",
     "CheckpointDeserializationError",
     "CheckpointStorageError",
     "DiffRetrievalResult",
+    "ExtensionInspector",
     "GitHubNetworkClient",
     "LLMSpecialistAdapter",
+    "Migration",
+    "MigrationError",
+    "MigrationRunner",
     "RedisCheckpointSaver",
     "RedisJobQueue",
     "StaleLeaseError",
+    "TigerConfig",
+    "TigerConfigurationError",
+    "TigerConnectionError",
+    "TigerConnectionManager",
+    "TigerError",
+    "TigerExtensionError",
     "create_specialist_handlers",
     "create_webhook_app",
+    "mask_database_url",
 ]

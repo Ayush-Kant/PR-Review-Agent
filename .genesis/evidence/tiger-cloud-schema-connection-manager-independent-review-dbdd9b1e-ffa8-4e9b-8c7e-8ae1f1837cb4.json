@@ -1,0 +1,13 @@
+{
+  "task": "tiger-cloud-schema-connection-manager",
+  "gate": "independent-review",
+  "kind": "review",
+  "attempt": "dbdd9b1e-ffa8-4e9b-8c7e-8ae1f1837cb4",
+  "human": "Ayush Kant",
+  "reason": "Approve W1-05 Tiger Cloud schema and connection manager implementation and verification",
+  "observed_at": "2026-09-17T06:43:49.990Z",
+  "source_hash": "ff6a34ce32a08ef17bca5c048d9e06e08a465a849e6f338b501bff8200f9359d",
+  "config_hash": "21cdb586a624562e6100b0f3b279b10998d8d63116189878a2d62365c4c1cca2",
+  "reviewed_proofs": "c375c271f23b48827dfd132442507428cd5f5029cb2985470ba3ac9c662b3ca8",
+  "hash": "2528a8a28818aebb757a52f5a4495060dd52429dbec349cd9320e0c69a03187d"
+}

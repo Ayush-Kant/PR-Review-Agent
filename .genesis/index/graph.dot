@@ -7,6 +7,8 @@ digraph genesis {
   "file:pr_review_agent/adapters/llm.py" [label="pr_review_agent/adapters/llm.py",class="file"];
   "file:pr_review_agent/adapters/redis_checkpoint.py" [label="pr_review_agent/adapters/redis_checkpoint.py",class="file"];
   "file:pr_review_agent/adapters/redis_queue.py" [label="pr_review_agent/adapters/redis_queue.py",class="file"];
+  "file:pr_review_agent/adapters/tiger_connection.py" [label="pr_review_agent/adapters/tiger_connection.py",class="file"];
+  "file:pr_review_agent/adapters/tiger_migrations.py" [label="pr_review_agent/adapters/tiger_migrations.py",class="file"];
   "file:pr_review_agent/adapters/webhook_ingress.py" [label="pr_review_agent/adapters/webhook_ingress.py",class="file"];
   "file:pr_review_agent/cost_controls.py" [label="pr_review_agent/cost_controls.py",class="file"];
   "file:pr_review_agent/evaluation.py" [label="pr_review_agent/evaluation.py",class="file"];
@@ -22,6 +24,8 @@ digraph genesis {
   "file:pr_review_agent/worker.py" [label="pr_review_agent/worker.py",class="file"];
   "file:scratch/analyze_genesis.py" [label="scratch/analyze_genesis.py",class="file"];
   "file:scratch/dump_forensic_report.py" [label="scratch/dump_forensic_report.py",class="file"];
+  "file:scratch/inspect_genesis_tasks.py" [label="scratch/inspect_genesis_tasks.py",class="file"];
+  "file:scratch/print_decisions.py" [label="scratch/print_decisions.py",class="file"];
   "file:scratch/query_case5.py" [label="scratch/query_case5.py",class="file"];
   "file:scripts/evaluate_golden_live.py" [label="scripts/evaluate_golden_live.py",class="file"];
   "file:scripts/evaluate_golden.py" [label="scripts/evaluate_golden.py",class="file"];
@@ -41,6 +45,7 @@ digraph genesis {
   "file:tests/test_retrieval_and_findings.py" [label="tests/test_retrieval_and_findings.py",class="file"];
   "file:tests/test_review_orchestration.py" [label="tests/test_review_orchestration.py",class="file"];
   "file:tests/test_security_boundaries.py" [label="tests/test_security_boundaries.py",class="file"];
+  "file:tests/test_tiger_schema_and_connection.py" [label="tests/test_tiger_schema_and_connection.py",class="file"];
   "file:tests/test_webhook_intake.py" [label="tests/test_webhook_intake.py",class="file"];
 
 }

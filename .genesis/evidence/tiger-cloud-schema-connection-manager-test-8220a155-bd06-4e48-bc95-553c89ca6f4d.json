@@ -1,0 +1,30 @@
+{
+  "task": "tiger-cloud-schema-connection-manager",
+  "gate": "test",
+  "kind": "command",
+  "attempt": "8220a155-bd06-4e48-bc95-553c89ca6f4d",
+  "command": "python -m pytest tests/test_tiger_schema_and_connection.py",
+  "started_at": "2026-09-17T06:42:11.739Z",
+  "observed_at": "2026-09-17T06:42:20.708Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 20 items\r\n\r\ntests\\test_tiger_schema_and_connection.py .........s..........           [100%]\r\n\r\n======================== 19 passed, 1 skipped in 0.85s ========================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "e3e81103a93dbc706d5b486d96abda4354468088",
+    "dirty": true
+  },
+  "source_hash": "ff6a34ce32a08ef17bca5c048d9e06e08a465a849e6f338b501bff8200f9359d",
+  "before_hash": "ff6a34ce32a08ef17bca5c048d9e06e08a465a849e6f338b501bff8200f9359d",
+  "config_hash": "21cdb586a624562e6100b0f3b279b10998d8d63116189878a2d62365c4c1cca2",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "c900e37a41d25d686b54f240676bdb40fbe804da7add214f2f26a66097bb1a3d"
+}
