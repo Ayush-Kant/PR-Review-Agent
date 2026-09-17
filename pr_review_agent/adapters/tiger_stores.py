@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 import logging
@@ -125,10 +125,51 @@ def _parse_timestamp(ts: Any) -> float:
         return float(ts)
     if isinstance(ts, str):
         try:
-            return datetime.fromisoformat(ts.replace(" ", "T")).timestamp()
+            iso_str = ts.replace(" ", "T")
+            dt = datetime.fromisoformat(iso_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.timestamp()
         except Exception:
-            return time.time()
+            try:
+                return float(ts)
+            except Exception:
+                return time.time()
     return time.time()
+
+
+def _canonical_finding_fingerprint(data: Mapping[str, Any]) -> str:
+    """Return a deterministic JSON canonical payload/fingerprint for comparing CanonicalFinding data."""
+    raw_lr = data.get("line_range")
+    line_range_list = list(raw_lr) if isinstance(raw_lr, (list, tuple)) else None
+
+    material_fields = {
+        "canonical_id": data.get("canonical_id"),
+        "repository_id": data.get("repository_id"),
+        "head_sha": data.get("head_sha"),
+        "category": data.get("category"),
+        "severity": data.get("severity"),
+        "confidence": float(data.get("confidence", 0.0)) if data.get("confidence") is not None else None,
+        "summary": data.get("summary"),
+        "rationale": data.get("rationale"),
+        "file_path": data.get("file_path"),
+        "line_range": line_range_list,
+        "contributing_candidate_ids": sorted(list(data.get("contributing_candidate_ids") or [])),
+        "contributing_specialists": sorted(list(data.get("contributing_specialists") or [])),
+        "evidence_refs": sorted(list(data.get("evidence_refs") or [])),
+        "remediation": data.get("remediation"),
+        "disposition": str(data.get("disposition")),
+        "disposition_reason": data.get("disposition_reason"),
+        "merge_rationale": data.get("merge_rationale"),
+        "policy_version": data.get("policy_version"),
+        "delivery_id": data.get("delivery_id"),
+        "run_id": data.get("run_id"),
+        "raw_severity": data.get("raw_severity"),
+        "calibrated_severity": data.get("calibrated_severity"),
+        "calibration_rule": data.get("calibration_rule"),
+        "calibration_reason": data.get("calibration_reason"),
+    }
+    return json.dumps(material_fields, sort_keys=True)
 
 
 def _has_unredacted_secrets(obj: Any) -> bool:
@@ -179,165 +220,176 @@ class TigerCodeMemoryStore(CodeMemoryStoreProtocol):
     ) -> int:
         """Index a snapshot of chunks or files for a revision, ensuring repository/revision isolation."""
         current_time = time.time() if now is None else now
+        persisted_now = datetime.fromtimestamp(current_time, tz=timezone.utc)
         conn = self.connection_manager.get_connection()
         indexed_count = 0
 
-        # Mark prior revisions of this repository as stale atomically
-        _execute(
-            conn,
-            "UPDATE repository_revisions SET is_fresh = FALSE WHERE repository_id = %s AND revision != %s",
-            (repository_id, revision),
-        )
+        try:
+            # Mark prior revisions of this repository as stale atomically
+            _execute(
+                conn,
+                "UPDATE repository_revisions SET is_fresh = FALSE WHERE repository_id = %s AND revision != %s",
+                (repository_id, revision),
+            )
 
-        # Remove previous chunks for this exact revision if reindexing
-        _execute(
-            conn,
-            "DELETE FROM code_chunks WHERE repository_id = %s AND revision = %s",
-            (repository_id, revision),
-        )
+            # Remove previous chunks for this exact revision if reindexing
+            _execute(
+                conn,
+                "DELETE FROM code_chunks WHERE repository_id = %s AND revision = %s",
+                (repository_id, revision),
+            )
 
-        if isinstance(chunks, Sequence) and not isinstance(chunks, (str, bytes)):
-            # Group chunks by file_path
-            files_map: dict[str, list[CodeChunk]] = {}
-            for chk in chunks:
-                files_map.setdefault(chk.file_path, []).append(chk)
+            if isinstance(chunks, Sequence) and not isinstance(chunks, (str, bytes)):
+                # Group chunks by file_path
+                files_map: dict[str, list[CodeChunk]] = {}
+                for chk in chunks:
+                    files_map.setdefault(chk.file_path, []).append(chk)
 
-            for file_path, fchunks in sorted(files_map.items()):
-                combined = "".join(c.content for c in fchunks)
-                file_hash = hashlib.sha256(combined.encode("utf-8")).hexdigest()
-                _execute(
-                    conn,
-                    """
-                    INSERT INTO repo_file_index (
-                        repository_id, revision, file_path, content_hash, index_version, is_fresh, indexed_at
-                    ) VALUES (%s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP)
-                    ON CONFLICT (repository_id, revision, file_path) DO UPDATE SET
-                        content_hash = EXCLUDED.content_hash,
-                        index_version = EXCLUDED.index_version,
-                        is_fresh = TRUE,
-                        indexed_at = CURRENT_TIMESTAMP
-                    """,
-                    (repository_id, revision, file_path, file_hash, index_version),
-                )
-
-                for idx, chk in enumerate(fchunks):
-                    chunk_uuid = _to_uuid(chk.chunk_id)
+                for file_path, fchunks in sorted(files_map.items()):
+                    combined = "".join(c.content for c in fchunks)
+                    file_hash = hashlib.sha256(combined.encode("utf-8")).hexdigest()
                     _execute(
                         conn,
                         """
-                        INSERT INTO code_chunks (
-                            chunk_id, repository_id, revision, file_path,
-                            chunk_index, start_line, end_line, content, content_hash,
-                            index_version, created_at, updated_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                        ON CONFLICT (repository_id, revision, file_path, chunk_index) DO UPDATE SET
-                            start_line = EXCLUDED.start_line,
-                            end_line = EXCLUDED.end_line,
-                            content = EXCLUDED.content,
+                        INSERT INTO repo_file_index (
+                            repository_id, revision, file_path, content_hash, index_version, is_fresh, indexed_at
+                        ) VALUES (%s, %s, %s, %s, %s, TRUE, %s)
+                        ON CONFLICT (repository_id, revision, file_path) DO UPDATE SET
                             content_hash = EXCLUDED.content_hash,
                             index_version = EXCLUDED.index_version,
-                            updated_at = CURRENT_TIMESTAMP
+                            is_fresh = TRUE,
+                            indexed_at = %s
                         """,
-                        (
-                            chunk_uuid,
-                            repository_id,
-                            revision,
-                            file_path,
-                            idx,
-                            chk.start_line,
-                            chk.end_line,
-                            chk.content,
-                            chk.content_hash,
-                            chk.index_version,
-                        ),
+                        (repository_id, revision, file_path, file_hash, index_version, persisted_now, persisted_now),
                     )
-                    indexed_count += 1
-        elif isinstance(chunks, Mapping):
-            # Process each file into chunks
-            for file_path, content in sorted(chunks.items()):
-                file_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-                # Record / update file index entry
-                _execute(
-                    conn,
-                    """
-                    INSERT INTO repo_file_index (
-                        repository_id, revision, file_path, content_hash, index_version, is_fresh, indexed_at
-                    ) VALUES (%s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP)
-                    ON CONFLICT (repository_id, revision, file_path) DO UPDATE SET
-                        content_hash = EXCLUDED.content_hash,
-                        index_version = EXCLUDED.index_version,
-                        is_fresh = TRUE,
-                        indexed_at = CURRENT_TIMESTAMP
-                    """,
-                    (repository_id, revision, file_path, file_hash, index_version),
-                )
+                    for idx, chk in enumerate(fchunks):
+                        chunk_uuid = _to_uuid(chk.chunk_id)
+                        _execute(
+                            conn,
+                            """
+                            INSERT INTO code_chunks (
+                                chunk_id, repository_id, revision, file_path,
+                                chunk_index, start_line, end_line, content, content_hash,
+                                index_version, created_at, updated_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (repository_id, revision, file_path, chunk_index) DO UPDATE SET
+                                start_line = EXCLUDED.start_line,
+                                end_line = EXCLUDED.end_line,
+                                content = EXCLUDED.content,
+                                content_hash = EXCLUDED.content_hash,
+                                index_version = EXCLUDED.index_version,
+                                updated_at = %s
+                            """,
+                            (
+                                chunk_uuid,
+                                repository_id,
+                                revision,
+                                file_path,
+                                idx,
+                                chk.start_line,
+                                chk.end_line,
+                                chk.content,
+                                chk.content_hash,
+                                chk.index_version,
+                                persisted_now,
+                                persisted_now,
+                                persisted_now,
+                            ),
+                        )
+                        indexed_count += 1
+            elif isinstance(chunks, Mapping):
+                # Process each file into chunks
+                for file_path, content in sorted(chunks.items()):
+                    file_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-                lines = content.splitlines(keepends=True)
-                if not lines:
-                    continue
-
-                chunk_idx = 0
-                for i in range(0, len(lines), chunk_line_size):
-                    chunk_lines = lines[i : i + chunk_line_size]
-                    start_line = i + 1
-                    end_line = i + len(chunk_lines)
-                    chunk_text = "".join(chunk_lines)
-                    chunk_hash = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
-
-                    # Derive deterministic UUID from domain coordinates
-                    domain_chunk_key = f"{repository_id}:{revision}:{file_path}:{start_line}"
-                    chunk_uuid = _to_uuid(domain_chunk_key)
-
+                    # Record / update file index entry
                     _execute(
                         conn,
                         """
-                        INSERT INTO code_chunks (
-                            chunk_id, repository_id, revision, file_path,
-                            chunk_index, start_line, end_line, content, content_hash,
-                            index_version, created_at, updated_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                        ON CONFLICT (repository_id, revision, file_path, chunk_index) DO UPDATE SET
-                            start_line = EXCLUDED.start_line,
-                            end_line = EXCLUDED.end_line,
-                            content = EXCLUDED.content,
+                        INSERT INTO repo_file_index (
+                            repository_id, revision, file_path, content_hash, index_version, is_fresh, indexed_at
+                        ) VALUES (%s, %s, %s, %s, %s, TRUE, %s)
+                        ON CONFLICT (repository_id, revision, file_path) DO UPDATE SET
                             content_hash = EXCLUDED.content_hash,
                             index_version = EXCLUDED.index_version,
-                            updated_at = CURRENT_TIMESTAMP
+                            is_fresh = TRUE,
+                            indexed_at = %s
                         """,
-                        (
-                            chunk_uuid,
-                            repository_id,
-                            revision,
-                            file_path,
-                            chunk_idx,
-                            start_line,
-                            end_line,
-                            chunk_text,
-                            chunk_hash,
-                            index_version,
-                        ),
+                        (repository_id, revision, file_path, file_hash, index_version, persisted_now, persisted_now),
                     )
-                    chunk_idx += 1
-                    indexed_count += 1
 
-        # Record revision-level freshness (supports 0-chunk revisions cleanly)
-        _execute(
-            conn,
-            """
-            INSERT INTO repository_revisions (
-                repository_id, revision, is_fresh, indexed_at, chunk_count
-            ) VALUES (%s, %s, TRUE, CURRENT_TIMESTAMP, %s)
-            ON CONFLICT (repository_id, revision) DO UPDATE SET
-                is_fresh = TRUE,
-                indexed_at = CURRENT_TIMESTAMP,
-                chunk_count = EXCLUDED.chunk_count
-            """,
-            (repository_id, revision, indexed_count),
-        )
+                    lines = content.splitlines(keepends=True)
+                    if not lines:
+                        continue
 
-        _commit(conn)
-        return indexed_count
+                    chunk_idx = 0
+                    for i in range(0, len(lines), chunk_line_size):
+                        chunk_lines = lines[i : i + chunk_line_size]
+                        start_line = i + 1
+                        end_line = i + len(chunk_lines)
+                        chunk_text = "".join(chunk_lines)
+                        chunk_hash = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
+
+                        # Derive deterministic UUID from domain coordinates
+                        domain_chunk_key = f"{repository_id}:{revision}:{file_path}:{start_line}"
+                        chunk_uuid = _to_uuid(domain_chunk_key)
+
+                        _execute(
+                            conn,
+                            """
+                            INSERT INTO code_chunks (
+                                chunk_id, repository_id, revision, file_path,
+                                chunk_index, start_line, end_line, content, content_hash,
+                                index_version, created_at, updated_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (repository_id, revision, file_path, chunk_index) DO UPDATE SET
+                                start_line = EXCLUDED.start_line,
+                                end_line = EXCLUDED.end_line,
+                                content = EXCLUDED.content,
+                                content_hash = EXCLUDED.content_hash,
+                                index_version = EXCLUDED.index_version,
+                                updated_at = %s
+                            """,
+                            (
+                                chunk_uuid,
+                                repository_id,
+                                revision,
+                                file_path,
+                                chunk_idx,
+                                start_line,
+                                end_line,
+                                chunk_text,
+                                chunk_hash,
+                                index_version,
+                                persisted_now,
+                                persisted_now,
+                                persisted_now,
+                            ),
+                        )
+                        chunk_idx += 1
+                        indexed_count += 1
+
+            # Record revision-level freshness (supports 0-chunk revisions cleanly)
+            _execute(
+                conn,
+                """
+                INSERT INTO repository_revisions (
+                    repository_id, revision, is_fresh, indexed_at, chunk_count
+                ) VALUES (%s, %s, TRUE, %s, %s)
+                ON CONFLICT (repository_id, revision) DO UPDATE SET
+                    is_fresh = TRUE,
+                    indexed_at = %s,
+                    chunk_count = EXCLUDED.chunk_count
+                """,
+                (repository_id, revision, persisted_now, indexed_count, persisted_now),
+            )
+
+            _commit(conn)
+            return indexed_count
+        except Exception:
+            _rollback(conn)
+            raise
 
     def is_fresh(self, repository_id: str, revision: str) -> bool:
         """Return True if the repository revision is known and fresh."""
@@ -458,49 +510,53 @@ class TigerReviewTruthStore:
 
         conn = self.connection_manager.get_connection()
 
-        # Check existing run_id
-        cur = _execute(
-            conn,
-            "SELECT repository_id, pull_number, head_sha, base_sha, delivery_id FROM pr_review_records WHERE run_id = %s",
-            (run_id,),
-        )
-        existing = cur.fetchone() if cur and hasattr(cur, "fetchone") else None
-        if existing:
-            if (
-                existing[0] == repository_id
-                and existing[1] == pull_number
-                and existing[2] == head_sha
-                and existing[3] == base_sha
-                and existing[4] == delivery_id
-            ):
-                return  # Identical registration is idempotent
-            raise ConflictingFindingError(
-                f"Run ID '{run_id}' already registered with conflicting context: "
-                f"existing={existing}, requested={(repository_id, pull_number, head_sha, base_sha, delivery_id)}"
+        try:
+            # Check existing run_id
+            cur = _execute(
+                conn,
+                "SELECT repository_id, pull_number, head_sha, base_sha, delivery_id FROM pr_review_records WHERE run_id = %s",
+                (run_id,),
             )
+            existing = cur.fetchone() if cur and hasattr(cur, "fetchone") else None
+            if existing:
+                if (
+                    existing[0] == repository_id
+                    and existing[1] == pull_number
+                    and existing[2] == head_sha
+                    and existing[3] == base_sha
+                    and existing[4] == delivery_id
+                ):
+                    return  # Identical registration is idempotent
+                raise ConflictingFindingError(
+                    f"Run ID '{run_id}' already registered with conflicting context: "
+                    f"existing={existing}, requested={(repository_id, pull_number, head_sha, base_sha, delivery_id)}"
+                )
 
-        # Check existing delivery_id
-        cur_deliv = _execute(
-            conn,
-            "SELECT run_id FROM pr_review_records WHERE delivery_id = %s",
-            (delivery_id,),
-        )
-        existing_deliv = cur_deliv.fetchone() if cur_deliv and hasattr(cur_deliv, "fetchone") else None
-        if existing_deliv and existing_deliv[0] != run_id:
-            raise ConflictingFindingError(
-                f"Delivery ID '{delivery_id}' already associated with a different run ID '{existing_deliv[0]}'"
+            # Check existing delivery_id
+            cur_deliv = _execute(
+                conn,
+                "SELECT run_id FROM pr_review_records WHERE delivery_id = %s",
+                (delivery_id,),
             )
+            existing_deliv = cur_deliv.fetchone() if cur_deliv and hasattr(cur_deliv, "fetchone") else None
+            if existing_deliv and existing_deliv[0] != run_id:
+                raise ConflictingFindingError(
+                    f"Delivery ID '{delivery_id}' already associated with a different run ID '{existing_deliv[0]}'"
+                )
 
-        _execute(
-            conn,
-            """
-            INSERT INTO pr_review_records (
-                run_id, repository_id, pull_number, head_sha, base_sha, delivery_id, state, policy_version
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (run_id, repository_id, pull_number, head_sha, base_sha, delivery_id, state, policy_version),
-        )
-        _commit(conn)
+            _execute(
+                conn,
+                """
+                INSERT INTO pr_review_records (
+                    run_id, repository_id, pull_number, head_sha, base_sha, delivery_id, state, policy_version
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (run_id, repository_id, pull_number, head_sha, base_sha, delivery_id, state, policy_version),
+            )
+            _commit(conn)
+        except Exception:
+            _rollback(conn)
+            raise
 
     def _resolve_context(
         self,
@@ -509,6 +565,16 @@ class TigerReviewTruthStore:
         explicit_delivery_id: str | None,
     ) -> ReviewRunContext:
         """Resolve and validate parent review run context, strictly failing closed on uncertainty."""
+        # Fail closed if both explicit and finding identifiers are present and differ
+        if explicit_run_id and finding.run_id and explicit_run_id != finding.run_id:
+            raise ConflictingFindingError(
+                f"Explicit run_id '{explicit_run_id}' conflicts with finding.run_id '{finding.run_id}'"
+            )
+        if explicit_delivery_id and finding.delivery_id and explicit_delivery_id != finding.delivery_id:
+            raise ConflictingFindingError(
+                f"Explicit delivery_id '{explicit_delivery_id}' conflicts with finding.delivery_id '{finding.delivery_id}'"
+            )
+
         run_id = explicit_run_id or finding.run_id
         delivery_id = explicit_delivery_id or finding.delivery_id
 
@@ -592,9 +658,21 @@ class TigerReviewTruthStore:
             raise ConflictingFindingError(
                 f"Finding head_sha '{finding.head_sha}' conflicts with registered run head_sha '{ctx.head_sha}'"
             )
+        if run_id and run_id != ctx.run_id and run_id != "run-unknown":
+            raise ConflictingFindingError(
+                f"Effective run_id '{run_id}' conflicts with registered run context run_id '{ctx.run_id}'"
+            )
+        if finding.run_id and finding.run_id != ctx.run_id and finding.run_id != "run-unknown":
+            raise ConflictingFindingError(
+                f"Finding run_id '{finding.run_id}' conflicts with registered run context run_id '{ctx.run_id}'"
+            )
         if delivery_id and delivery_id != ctx.delivery_id and delivery_id != "delivery-unknown":
             raise ConflictingFindingError(
-                f"Supplied delivery_id '{delivery_id}' conflicts with registered run delivery_id '{ctx.delivery_id}'"
+                f"Effective delivery_id '{delivery_id}' conflicts with registered run context delivery_id '{ctx.delivery_id}'"
+            )
+        if finding.delivery_id and finding.delivery_id != ctx.delivery_id and finding.delivery_id != "delivery-unknown":
+            raise ConflictingFindingError(
+                f"Finding delivery_id '{finding.delivery_id}' conflicts with registered run context delivery_id '{ctx.delivery_id}'"
             )
 
         return ctx
@@ -613,6 +691,7 @@ class TigerReviewTruthStore:
     ) -> ReviewTruthRecord:
         """Record the initial finding in Review Truth with sequence_id = 1."""
         current_time = time.time() if now is None else now
+        persisted_now = datetime.fromtimestamp(current_time, tz=timezone.utc)
         ctx = self._resolve_context(finding, run_id, delivery_id)
 
         sequence_id = 1
@@ -626,33 +705,35 @@ class TigerReviewTruthStore:
 
         conn = self.connection_manager.get_connection()
 
-        # Check existing sequence 1 record
-        cur = _execute(
-            conn,
-            """
-            SELECT record_id, canonical_id, sequence_id, repository_id, head_sha,
-                   delivery_id, run_id, state, actor, actor_role, rationale,
-                   finding_json, timestamp
-            FROM finding_records
-            WHERE canonical_id = %s AND sequence_id = 1
-            """,
-            (finding.canonical_id,),
-        )
-        existing = cur.fetchone() if cur and hasattr(cur, "fetchone") else None
-        if existing:
-            # Idempotency check: verify payload compatibility
-            existing_data = json.loads(existing[11]) if isinstance(existing[11], str) else existing[11]
-            if (
-                existing_data.get("summary") == finding.summary
-                and existing_data.get("file_path") == finding.file_path
-                and existing_data.get("severity") == finding.severity
-            ):
-                return self._row_to_record(existing)
-            raise ConflictingFindingError(
-                f"Conflicting finding data detected for existing canonical ID '{finding.canonical_id}'"
-            )
-
         try:
+            # Check existing sequence 1 record
+            cur = _execute(
+                conn,
+                """
+                SELECT record_id, canonical_id, sequence_id, repository_id, head_sha,
+                       delivery_id, run_id, state, actor, actor_role, rationale,
+                       finding_json, timestamp
+                FROM finding_records
+                WHERE canonical_id = %s AND sequence_id = 1
+                """,
+                (finding.canonical_id,),
+            )
+            existing = cur.fetchone() if cur and hasattr(cur, "fetchone") else None
+            if existing:
+                # Idempotency check: verify full canonical payload fingerprint and parent provenance
+                existing_data = json.loads(existing[11]) if isinstance(existing[11], str) else existing[11]
+                if (
+                    _canonical_finding_fingerprint(existing_data) == _canonical_finding_fingerprint(finding_dict)
+                    and existing[3] == ctx.repository_id
+                    and existing[4] == ctx.head_sha
+                    and existing[5] == ctx.delivery_id
+                    and existing[6] == ctx.run_id
+                ):
+                    return self._row_to_record(existing)
+                raise ConflictingFindingError(
+                    f"Conflicting finding data detected for existing canonical ID '{finding.canonical_id}'"
+                )
+
             _execute(
                 conn,
                 """
@@ -660,7 +741,7 @@ class TigerReviewTruthStore:
                     record_id, canonical_id, sequence_id, repository_id, head_sha,
                     delivery_id, run_id, state, actor, actor_role,
                     rationale, finding_json, timestamp
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     record_id,
@@ -675,13 +756,14 @@ class TigerReviewTruthStore:
                     actor_role,
                     effective_rationale,
                     finding_json,
+                    persisted_now,
                 ),
             )
             _commit(conn)
         except Exception as exc:
+            _rollback(conn)
             # Handle concurrent race: if another worker inserted sequence 1 first
             if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
-                _rollback(conn)
                 cur_retry = _execute(
                     conn,
                     """
@@ -697,15 +779,16 @@ class TigerReviewTruthStore:
                 if r_row:
                     r_data = json.loads(r_row[11]) if isinstance(r_row[11], str) else r_row[11]
                     if (
-                        r_data.get("summary") == finding.summary
-                        and r_data.get("file_path") == finding.file_path
-                        and r_data.get("severity") == finding.severity
+                        _canonical_finding_fingerprint(r_data) == _canonical_finding_fingerprint(finding_dict)
+                        and r_row[3] == ctx.repository_id
+                        and r_row[4] == ctx.head_sha
+                        and r_row[5] == ctx.delivery_id
+                        and r_row[6] == ctx.run_id
                     ):
                         return self._row_to_record(r_row)
                     raise ConflictingFindingError(
                         f"Concurrent conflicting finding detected for '{finding.canonical_id}'"
                     ) from exc
-            _rollback(conn)
             raise
 
         return ReviewTruthRecord(
@@ -737,56 +820,84 @@ class TigerReviewTruthStore:
     ) -> ReviewTruthRecord:
         """Validate and record a state transition with strict database transaction locking safety."""
         current_time = time.time() if now is None else now
+        persisted_now = datetime.fromtimestamp(current_time, tz=timezone.utc)
         conn = self.connection_manager.get_connection()
 
-        # 1. Acquire transaction-level database lock for canonical_id
+        # 1. Acquire transaction-level database lock for canonical_id.
+        # Must fail-closed on lock acquisition failure and never continue without serialization.
         try:
             _execute(conn, "SELECT pg_advisory_xact_lock(hashtext(%s))", (canonical_id,))
-        except Exception:
-            pass
+        except Exception as exc:
+            _rollback(conn)
+            raise ConcurrentTransitionError(
+                f"Failed to acquire advisory transaction lock for '{canonical_id}': {exc}"
+            ) from exc
 
-        # 2. Re-read latest committed state after acquiring lock
-        cur_latest = _execute(
-            conn,
-            """
-            SELECT record_id, canonical_id, sequence_id, repository_id, head_sha,
-                   delivery_id, run_id, state, actor, actor_role,
-                   rationale, finding_json, timestamp
-            FROM finding_records
-            WHERE canonical_id = %s
-            ORDER BY sequence_id DESC
-            LIMIT 1
-            """,
-            (canonical_id,),
-        )
-        latest_row = cur_latest.fetchone() if cur_latest and hasattr(cur_latest, "fetchone") else None
-        if latest_row is None:
-            raise KeyError(f"Canonical finding {canonical_id} not found in Review Truth")
-        latest = self._row_to_record(latest_row)
-
-        # 3. Validate transition after lock acquisition
-        current_state = latest.state
-        allowed = ALLOWED_TRANSITIONS.get(current_state, frozenset())
-        if new_state not in allowed:
-            raise ValueError(
-                f"Illegal state transition from {current_state.value} to {new_state.value} for {canonical_id}"
-            )
-
-        # 4. Allocate next sequence
-        seq = latest.sequence_id + 1
-        record_id = f"truth-{canonical_id}-{seq}"
-
-        finding_dict = asdict(updated_finding) if updated_finding else dict(latest.finding_data)
-        if updated_finding:
-            finding_dict["disposition"] = (
-                updated_finding.disposition.value
-                if hasattr(updated_finding.disposition, "value")
-                else str(updated_finding.disposition)
-            )
-        finding_json = json.dumps(finding_dict, sort_keys=True)
-
-        # 5. Append immutable record and commit
         try:
+            # 2. Re-read latest committed state after acquiring lock
+            cur_latest = _execute(
+                conn,
+                """
+                SELECT record_id, canonical_id, sequence_id, repository_id, head_sha,
+                       delivery_id, run_id, state, actor, actor_role,
+                       rationale, finding_json, timestamp
+                FROM finding_records
+                WHERE canonical_id = %s
+                ORDER BY sequence_id DESC
+                LIMIT 1
+                """,
+                (canonical_id,),
+            )
+            latest_row = cur_latest.fetchone() if cur_latest and hasattr(cur_latest, "fetchone") else None
+            if latest_row is None:
+                raise KeyError(f"Canonical finding {canonical_id} not found in Review Truth")
+            latest = self._row_to_record(latest_row)
+
+            # 3. Validate transition after lock acquisition
+            current_state = latest.state
+            allowed = ALLOWED_TRANSITIONS.get(current_state, frozenset())
+            if new_state not in allowed:
+                raise ValueError(
+                    f"Illegal state transition from {current_state.value} to {new_state.value} for {canonical_id}"
+                )
+
+            # Validate updated_finding provenance consistency if provided
+            if updated_finding:
+                if updated_finding.canonical_id != canonical_id:
+                    raise ConflictingFindingError(
+                        f"Updated finding canonical_id '{updated_finding.canonical_id}' does not match transition target '{canonical_id}'"
+                    )
+                if updated_finding.repository_id and updated_finding.repository_id != latest.repository_id:
+                    raise ConflictingFindingError(
+                        f"Updated finding repository_id '{updated_finding.repository_id}' does not match truth record '{latest.repository_id}'"
+                    )
+                if updated_finding.head_sha and updated_finding.head_sha != latest.head_sha:
+                    raise ConflictingFindingError(
+                        f"Updated finding head_sha '{updated_finding.head_sha}' does not match truth record '{latest.head_sha}'"
+                    )
+                if updated_finding.run_id and updated_finding.run_id != latest.run_id and updated_finding.run_id != "run-unknown":
+                    raise ConflictingFindingError(
+                        f"Updated finding run_id '{updated_finding.run_id}' does not match truth record '{latest.run_id}'"
+                    )
+                if updated_finding.delivery_id and updated_finding.delivery_id != latest.delivery_id and updated_finding.delivery_id != "delivery-unknown":
+                    raise ConflictingFindingError(
+                        f"Updated finding delivery_id '{updated_finding.delivery_id}' does not match truth record '{latest.delivery_id}'"
+                    )
+
+            # 4. Allocate next sequence
+            seq = latest.sequence_id + 1
+            record_id = f"truth-{canonical_id}-{seq}"
+
+            finding_dict = asdict(updated_finding) if updated_finding else dict(latest.finding_data)
+            if updated_finding:
+                finding_dict["disposition"] = (
+                    updated_finding.disposition.value
+                    if hasattr(updated_finding.disposition, "value")
+                    else str(updated_finding.disposition)
+                )
+            finding_json = json.dumps(finding_dict, sort_keys=True)
+
+            # 5. Append immutable record and commit
             _execute(
                 conn,
                 """
@@ -794,7 +905,7 @@ class TigerReviewTruthStore:
                     record_id, canonical_id, sequence_id, repository_id, head_sha,
                     delivery_id, run_id, state, actor, actor_role,
                     rationale, finding_json, timestamp
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     record_id,
@@ -809,6 +920,7 @@ class TigerReviewTruthStore:
                     actor_role,
                     rationale,
                     finding_json,
+                    persisted_now,
                 ),
             )
             _commit(conn)
@@ -945,31 +1057,37 @@ class TigerAuditSpine:
         """Persist a time-ordered event with secret redaction. Strictly append-only and non-idempotent."""
         clean_details = redact_sensitive_data(dict(event.details))
         payload_json = json.dumps(clean_details, sort_keys=True)
+        persisted_ts = datetime.fromtimestamp(event.timestamp, tz=timezone.utc)
 
         conn = self.connection_manager.get_connection()
-        cur = _execute(
-            conn,
-            """
-            INSERT INTO agent_events (
-                correlation_id, event_name, step, repository_id,
-                pull_number, head_sha, run_id, payload, timestamp
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            RETURNING event_id
-            """,
-            (
-                event.correlation_id,
-                event.event_name,
-                event.step,
-                repository_id,
-                pull_number,
-                head_sha,
-                run_id,
-                payload_json,
-            ),
-        )
-        _commit(conn)
-        row = cur.fetchone() if cur and hasattr(cur, "fetchone") else None
-        return int(row[0]) if row else 1
+        try:
+            cur = _execute(
+                conn,
+                """
+                INSERT INTO agent_events (
+                    correlation_id, event_name, step, repository_id,
+                    pull_number, head_sha, run_id, payload, timestamp
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING event_id
+                """,
+                (
+                    event.correlation_id,
+                    event.event_name,
+                    event.step,
+                    repository_id,
+                    pull_number,
+                    head_sha,
+                    run_id,
+                    payload_json,
+                    persisted_ts,
+                ),
+            )
+            _commit(conn)
+            row = cur.fetchone() if cur and hasattr(cur, "fetchone") else None
+            return int(row[0]) if row else 1
+        except Exception:
+            _rollback(conn)
+            raise
 
     def record_events(
         self,
@@ -1050,32 +1168,36 @@ class TigerAuditSpine:
         """Persist a GitHub publication side-effect record idempotently."""
         conn = self.connection_manager.get_connection()
         payload_json = json.dumps(payload or {}, sort_keys=True)
-        _execute(
-            conn,
-            """
-            INSERT INTO github_review_effects (
-                idempotency_key, repository_id, pull_number, head_sha,
-                canonical_id, status, review_id, comment_id, html_url,
-                published_inline, reason, payload, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (idempotency_key) DO NOTHING
-            """,
-            (
-                idempotency_key,
-                repository_id,
-                pull_number,
-                head_sha,
-                canonical_id,
-                status,
-                review_id,
-                comment_id,
-                html_url,
-                published_inline,
-                reason,
-                payload_json,
-            ),
-        )
-        _commit(conn)
+        try:
+            _execute(
+                conn,
+                """
+                INSERT INTO github_review_effects (
+                    idempotency_key, repository_id, pull_number, head_sha,
+                    canonical_id, status, review_id, comment_id, html_url,
+                    published_inline, reason, payload, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (idempotency_key) DO NOTHING
+                """,
+                (
+                    idempotency_key,
+                    repository_id,
+                    pull_number,
+                    head_sha,
+                    canonical_id,
+                    status,
+                    review_id,
+                    comment_id,
+                    html_url,
+                    published_inline,
+                    reason,
+                    payload_json,
+                ),
+            )
+            _commit(conn)
+        except Exception:
+            _rollback(conn)
+            raise
 
     def reconstruct_run(self, correlation_id: str) -> RunProvenanceTrace:
         """Reconstruct provenance trace across Tiger Cloud tables.

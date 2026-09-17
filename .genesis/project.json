@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-17T17:37:47.094Z"
+    "updated_at": "2026-09-17T19:23:39.968Z"
   },
   "policy": {
     "ponytail": "full",
@@ -23,11 +23,11 @@
     }
   },
   "lifecycle": {
-    "phase": "build",
-    "status": "active",
-    "active_task": "tiger-production-data-adapters",
+    "phase": "verify",
+    "status": "ready",
+    "active_task": null,
     "blocker": null,
-    "next_action": "Run the task pre-flight."
+    "next_action": "Review completed work and choose the next bounded outcome."
   },
   "commands": {},
   "workflow": {
@@ -87,14 +87,14 @@
       ]
     },
     "plan_check": {
-      "at": "2026-09-17T11:15:14.911Z",
-      "source_hash": "0333315c749cb2c10cbfe54ea611dabe0f87a9591323627714f9ea2e9f8a7287"
+      "at": "2026-09-17T19:15:33.077Z",
+      "source_hash": "bd94121de03fa65585d681301cbf068809b69ae19cf6f7fc71a9e93c45639a5d"
     },
     "plan_approval": {
       "human": "Ayush Kant",
-      "reason": "Approve plan containing W1-06 task: tiger-production-data-adapters",
-      "at": "2026-09-17T11:15:36.961Z",
-      "source_hash": "0333315c749cb2c10cbfe54ea611dabe0f87a9591323627714f9ea2e9f8a7287"
+      "reason": "Reconcile W1-06 task scope",
+      "at": "2026-09-17T19:15:49.326Z",
+      "source_hash": "bd94121de03fa65585d681301cbf068809b69ae19cf6f7fc71a9e93c45639a5d"
     }
   },
   "artifacts": [
@@ -2084,10 +2084,18 @@
     {
       "id": "tiger-production-data-adapters",
       "outcome": "Implement Tiger Cloud production data adapters behind existing V1 contracts: TigerCodeMemoryStore, TigerReviewTruthStore, and TigerAuditSpine (W1-06)",
-      "state": "active",
+      "state": "done",
       "risk": "medium",
       "owner": null,
-      "scope": [],
+      "scope": [
+        "pr_review_agent/migrations/002_repository_revisions.sql",
+        "pr_review_agent/retrieval.py",
+        "pr_review_agent/observability.py",
+        "pr_review_agent/adapters/tiger_stores.py",
+        "pr_review_agent/adapters/__init__.py",
+        "tests/test_tiger_data_adapters.py",
+        "tests/test_tiger_schema_and_connection.py"
+      ],
       "dependencies": [],
       "requirements": [
         "FR-15"
@@ -2103,11 +2111,11 @@
           "mandatory": true,
           "status": "pass",
           "evidence": {
-            "path": ".genesis/evidence/tiger-production-data-adapters-test-c77735f6-93e2-47a5-8c64-a1b6d60d228f.json",
-            "hash": "ef6b3c4781af1c54993e9cacab4977d488220472a90da41da8a078cd69f76728",
-            "source_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240",
-            "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
-            "observed_at": "2026-09-17T17:37:46.778Z"
+            "path": ".genesis/evidence/tiger-production-data-adapters-test-c7e2414c-251b-446c-bfc9-55967f76436c.json",
+            "hash": "6766e2f3ca58e0fc371d2bff81d6e538a841f8cb80340bcf29bb58700dec7911",
+            "source_hash": "0f190be9cef972b8f49adbee4a3e93861d5c2d69d9f21da9bda6d48991baf581",
+            "config_hash": "cb8c7bec03248e7bfdb57f7c5be58b31f1776084c977c907749a3197d5568ea5",
+            "observed_at": "2026-09-17T19:17:29.039Z"
           }
         },
         {
@@ -2115,8 +2123,14 @@
           "kind": "review",
           "command": "",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/tiger-production-data-adapters-independent-review-ddf1db9b-3bb1-4ba4-89f2-0f2447614b59.json",
+            "hash": "67061781b17a9744237649c85d4e933f5ab2f20f2cd020faec1d7d5b0d58e102",
+            "source_hash": "0f190be9cef972b8f49adbee4a3e93861d5c2d69d9f21da9bda6d48991baf581",
+            "config_hash": "cb8c7bec03248e7bfdb57f7c5be58b31f1776084c977c907749a3197d5568ea5",
+            "observed_at": "2026-09-17T19:17:51.954Z"
+          }
         }
       ],
       "next_action": "Run the task pre-flight.",
@@ -2130,7 +2144,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-17T11:14:53.076Z",
-      "updated_at": "2026-09-17T12:27:12.563Z",
+      "updated_at": "2026-09-17T19:23:05.668Z",
       "base_manifest": {
         ".gitignore": "dc961659055b943bf2425da012d0fece8f2543d58d0e5936573a91e1c0455f15",
         "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
@@ -2377,6 +2391,24 @@
       "task": "tiger-schema-connection-correction",
       "human": "Ayush Kant",
       "reason": "Approve W1-05 Tiger schema and connection manager integrity corrections",
+      "revision": null
+    },
+    {
+      "id": "74ec962e-5770-46d0-a6da-d14460b1ab97",
+      "at": "2026-09-17T19:16:48.985Z",
+      "action": "resume",
+      "task": "tiger-production-data-adapters",
+      "human": null,
+      "reason": null,
+      "revision": null
+    },
+    {
+      "id": "ddf1db9b-3bb1-4ba4-89f2-0f2447614b59",
+      "at": "2026-09-17T19:17:51.954Z",
+      "action": "approve",
+      "task": "tiger-production-data-adapters",
+      "human": "Ayush Kant",
+      "reason": "W1-06 final independent review pass: fail-closed advisory locking, idempotency fingerprinting, transaction rollback atomicity, timestamp parity, updated finding provenance validation, and 28 focused adapter tests verified",
       "revision": null
     }
   ],
@@ -3676,6 +3708,54 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-17T17:37:46.778Z"
+    },
+    {
+      "id": "db631b93-2443-470c-a7ea-47de925b36aa",
+      "task": "tiger-production-data-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_tiger_data_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 24160,
+      "child_pid": 23864,
+      "started_at": "2026-09-17T18:06:37.644Z",
+      "status": "passed",
+      "before_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240",
+      "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-17T18:07:15.875Z"
+    },
+    {
+      "id": "c7e2414c-251b-446c-bfc9-55967f76436c",
+      "task": "tiger-production-data-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_tiger_data_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 17440,
+      "child_pid": 23812,
+      "started_at": "2026-09-17T19:17:12.454Z",
+      "status": "passed",
+      "before_hash": "0f190be9cef972b8f49adbee4a3e93861d5c2d69d9f21da9bda6d48991baf581",
+      "config_hash": "cb8c7bec03248e7bfdb57f7c5be58b31f1776084c977c907749a3197d5568ea5",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "0ce134f3cdca43b322c92040c7b30c596ee1ce21aef2c9c4ba62d0daf07f38a3",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-17T19:17:29.039Z"
     }
   ],
   "authorizations": [],
@@ -3683,14 +3763,14 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-17T16:37:48.799Z",
+    "at": "2026-09-17T19:23:39.485Z",
     "revision": {
-      "commit": "56f79c43325dc04caa629a1457f88b530aceefa6",
+      "commit": "83b9be6a2272b04206a73a8b2aced54ead911e81",
       "dirty": true,
-      "source_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240"
+      "source_hash": "0f190be9cef972b8f49adbee4a3e93861d5c2d69d9f21da9bda6d48991baf581"
     },
-    "active_task": "tiger-production-data-adapters",
-    "next_action": "Run the task pre-flight."
+    "active_task": null,
+    "next_action": "Review completed work and choose the next bounded outcome."
   },
   "legacy": null
 }

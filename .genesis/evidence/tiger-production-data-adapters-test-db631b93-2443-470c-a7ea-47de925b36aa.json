@@ -1,0 +1,30 @@
+{
+  "task": "tiger-production-data-adapters",
+  "gate": "test",
+  "kind": "command",
+  "attempt": "db631b93-2443-470c-a7ea-47de925b36aa",
+  "command": "python -m pytest tests/test_tiger_data_adapters.py",
+  "started_at": "2026-09-17T18:06:37.644Z",
+  "observed_at": "2026-09-17T18:07:15.875Z",
+  "exit_code": 0,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 21 items\r\n\r\ntests\\test_tiger_data_adapters.py .....................                  [100%]\r\n\r\n============================= 21 passed in 5.24s ==============================\r\n",
+  "stderr": "",
+  "failure": null,
+  "receipt": null,
+  "revision": {
+    "commit": "83b9be6a2272b04206a73a8b2aced54ead911e81",
+    "dirty": true
+  },
+  "source_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240",
+  "before_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240",
+  "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "f16215d719bc19f25e458d49dc5ec19b7b160b113456b3daa3bc23f70e67e847"
+}

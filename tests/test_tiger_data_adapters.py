@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 import concurrent.futures
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from datetime import datetime, timezone
 import inspect
 import json
 from pathlib import Path
@@ -100,6 +101,8 @@ class TigerPostgresSimulationConnection:
         self.conn = sqlite3.connect(":memory:", check_same_thread=False, isolation_level=None)
         self.conn.row_factory = sqlite3.Row
         self._lock = threading.RLock()
+        self._in_transaction = False
+        self.fail_advisory_lock = False
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -206,15 +209,34 @@ class TigerPostgresSimulationConnection:
 
     def execute(self, query: str, params: Sequence[Any] | Mapping[str, Any] | None = None) -> Any:
         with self._lock:
+            if "pg_advisory_xact_lock" in query:
+                if self.fail_advisory_lock:
+                    raise sqlite3.OperationalError("Simulated advisory lock acquisition failure: deadlock / timeout")
+                return SimulationCursor([(None,)])
+
             q = query.replace("%s", "?")
             # Convert RETURNING event_id for sqlite3 if needed
             is_returning_event_id = "RETURNING event_id" in q
             if is_returning_event_id:
                 q = q.replace("RETURNING event_id", "")
 
-            cur = self.conn.cursor()
+            # Ensure transaction is active for mutating DML
+            q_upper = q.strip().upper()
+            if not self._in_transaction and any(q_upper.startswith(cmd) for cmd in ("INSERT", "UPDATE", "DELETE", "REPLACE")):
+                self.conn.execute("BEGIN")
+                self._in_transaction = True
+
+            # Sanitize datetime parameters to ISO format for SQLite to avoid Python 3.12 deprecation
+            clean_params = params
             if params is not None:
-                cur.execute(q, params)
+                if isinstance(params, Mapping):
+                    clean_params = {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in params.items()}
+                elif isinstance(params, Sequence):
+                    clean_params = [(p.isoformat() if isinstance(p, datetime) else p) for p in params]
+
+            cur = self.conn.cursor()
+            if clean_params is not None:
+                cur.execute(q, clean_params)
             else:
                 cur.execute(q)
 
@@ -234,11 +256,15 @@ class TigerPostgresSimulationConnection:
 
     def commit(self) -> None:
         with self._lock:
-            self.conn.commit()
+            if self._in_transaction:
+                self.conn.commit()
+                self._in_transaction = False
 
     def rollback(self) -> None:
         with self._lock:
-            self.conn.rollback()
+            if self._in_transaction:
+                self.conn.rollback()
+                self._in_transaction = False
 
     def close(self) -> None:
         with self._lock:
@@ -428,6 +454,37 @@ class TestTigerDataAdapters(unittest.TestCase):
         self.assertTrue(self.code_store.is_fresh("tenant-1", "rev-shared"))
         self.assertTrue(self.code_store.is_fresh("tenant-2", "rev-shared"))
 
+    def test_code_memory_index_repository_atomicity_rollback(self) -> None:
+        """Verify index_repository rolls back all writes on failure, leaving connection usable."""
+        sim_conn = self.code_store.connection_manager.get_connection()
+        original_execute = sim_conn.execute
+
+        # Inject failure during repo_file_index insertion after code_chunks
+        fail_now = True
+
+        def failing_execute(query: str, params: Any = None) -> Any:
+            if fail_now and "repo_file_index" in query:
+                raise sqlite3.OperationalError("Simulated write failure during repo_file_index")
+            return original_execute(query, params)
+
+        sim_conn.execute = failing_execute
+        try:
+            with self.assertRaises(sqlite3.OperationalError):
+                self.code_store.index_repository("owner/repo-rb", "rev-rb-1", {"a.py": "code a", "b.py": "code b"})
+        finally:
+            sim_conn.execute = original_execute
+
+        # Verify atomicity: NO chunks or revision metadata committed
+        self.assertFalse(self.code_store.is_fresh("owner/repo-rb", "rev-rb-1"))
+        persisted_chunks = self.code_store.get_chunks("owner/repo-rb", "rev-rb-1")
+        self.assertEqual(0, len(persisted_chunks))
+
+        # Verify connection is usable afterward and subsequent indexing succeeds
+        count = self.code_store.index_repository("owner/repo-rb", "rev-rb-1", {"a.py": "code a", "b.py": "code b"})
+        self.assertEqual(2, count)
+        self.assertTrue(self.code_store.is_fresh("owner/repo-rb", "rev-rb-1"))
+        self.assertEqual(2, len(self.code_store.get_chunks("owner/repo-rb", "rev-rb-1")))
+
     # =========================================================================
     # C. REVIEW TRUTH STORE
     # =========================================================================
@@ -589,6 +646,63 @@ class TestTigerDataAdapters(unittest.TestCase):
                 rationale="Illegal re-approval",
             )
 
+    def test_record_transition_updated_finding_provenance_validation(self) -> None:
+        """Verify record_transition rejects updated_finding with conflicting provenance."""
+        self.truth_store.register_review_run(
+            run_id="run-trans-prov",
+            repository_id="test-owner/test-repo",
+            pull_number=10,
+            head_sha="abcdef0123456789abcdef0123456789abcdef01",
+            base_sha="base0123456789abcdef0123456789abcdef01",
+            delivery_id="deliv-trans-prov",
+        )
+        finding = _make_sample_finding(
+            canonical_id="can-prov-test",
+            run_id="run-trans-prov",
+            delivery_id="deliv-trans-prov",
+        )
+        self.truth_store.record_initial(finding, initial_state=TruthState.HELD)
+
+        # 1. Conflicting canonical_id in updated_finding
+        bad_cid = replace(finding, canonical_id="can-different-id")
+        with self.assertRaises(ConflictingFindingError) as cm:
+            self.truth_store.record_transition(
+                "can-prov-test",
+                TruthState.APPROVED,
+                updated_finding=bad_cid,
+            )
+        self.assertIn("does not match transition target", str(cm.exception))
+
+        # 2. Conflicting repository_id in updated_finding
+        bad_repo = replace(finding, repository_id="rogue/repo")
+        with self.assertRaises(ConflictingFindingError) as cm:
+            self.truth_store.record_transition(
+                "can-prov-test",
+                TruthState.APPROVED,
+                updated_finding=bad_repo,
+            )
+        self.assertIn("does not match truth record", str(cm.exception))
+
+        # 3. Conflicting head_sha in updated_finding
+        bad_sha = replace(finding, head_sha="9999999999999999999999999999999999999999")
+        with self.assertRaises(ConflictingFindingError) as cm:
+            self.truth_store.record_transition(
+                "can-prov-test",
+                TruthState.APPROVED,
+                updated_finding=bad_sha,
+            )
+        self.assertIn("does not match truth record", str(cm.exception))
+
+        # 4. Valid updated_finding transitions cleanly
+        valid_updated = replace(finding, rationale="Approved by human reviewer")
+        rec = self.truth_store.record_transition(
+            "can-prov-test",
+            TruthState.APPROVED,
+            updated_finding=valid_updated,
+        )
+        self.assertEqual(TruthState.APPROVED, rec.state)
+        self.assertEqual("Approved by human reviewer", rec.finding_data.get("rationale"))
+
     def test_review_truth_history_and_querying(self) -> None:
         """Verify get_latest_state, get_history, list_by_state, and list_all_canonical."""
         self.truth_store.register_review_run(
@@ -629,9 +743,226 @@ class TestTigerDataAdapters(unittest.TestCase):
         self.assertIn("can-h1", all_cids)
         self.assertIn("can-h2", all_cids)
 
+    def test_record_initial_idempotency_different_material_payload_fails_closed(self) -> None:
+        """Verify record_initial fails closed if an existing finding has same ID but differing material fields."""
+        self.truth_store.register_review_run(
+            run_id="run-idem",
+            repository_id="test-owner/test-repo",
+            pull_number=10,
+            head_sha="abcdef0123456789abcdef0123456789abcdef01",
+            base_sha="base0123456789abcdef0123456789abcdef01",
+            delivery_id="deliv-idem",
+        )
+        f1 = _make_sample_finding(
+            canonical_id="can-idem-diff",
+            run_id="run-idem",
+            delivery_id="deliv-idem",
+        )
+        rec1 = self.truth_store.record_initial(f1, initial_state=TruthState.HELD)
+        self.assertEqual(1, rec1.sequence_id)
+
+        # Same ID, identical payload -> returns existing record
+        f1_same = _make_sample_finding(
+            canonical_id="can-idem-diff",
+            run_id="run-idem",
+            delivery_id="deliv-idem",
+        )
+        rec1_dup = self.truth_store.record_initial(f1_same, initial_state=TruthState.HELD)
+        self.assertEqual(rec1.record_id, rec1_dup.record_id)
+
+        # Same summary, file_path, severity, but different rationale
+        f1_diff_rationale = replace(f1, rationale="DIFFERENT RATIONALE: potential exploit path")
+        with self.assertRaises(ConflictingFindingError):
+            self.truth_store.record_initial(f1_diff_rationale, initial_state=TruthState.HELD)
+
+        # Same summary, file_path, severity, but different confidence
+        f1_diff_confidence = replace(f1, confidence=0.99)
+        with self.assertRaises(ConflictingFindingError):
+            self.truth_store.record_initial(f1_diff_confidence, initial_state=TruthState.HELD)
+
+        # Same summary, file_path, severity, but different category
+        f1_diff_category = replace(f1, category="architecture")
+        with self.assertRaises(ConflictingFindingError):
+            self.truth_store.record_initial(f1_diff_category, initial_state=TruthState.HELD)
+
+    def test_parent_context_conflicting_explicit_and_finding_identifiers(self) -> None:
+        """Verify _resolve_context fails closed when explicit and finding identifiers conflict."""
+        self.truth_store.register_review_run(
+            run_id="run-p1",
+            repository_id="test-owner/test-repo",
+            pull_number=10,
+            head_sha="abcdef0123456789abcdef0123456789abcdef01",
+            base_sha="base0123456789abcdef0123456789abcdef01",
+            delivery_id="deliv-p1",
+        )
+        self.truth_store.register_review_run(
+            run_id="run-p2",
+            repository_id="test-owner/test-repo",
+            pull_number=10,
+            head_sha="abcdef0123456789abcdef0123456789abcdef01",
+            base_sha="base0123456789abcdef0123456789abcdef01",
+            delivery_id="deliv-p2",
+        )
+
+        finding = _make_sample_finding(
+            canonical_id="can-ctx-conflict",
+            run_id="run-p1",
+            delivery_id="deliv-p1",
+        )
+
+        # 1. Conflicting explicit run_id vs finding.run_id
+        with self.assertRaises(ConflictingFindingError) as cm:
+            self.truth_store.record_initial(finding, initial_state=TruthState.HELD, run_id="run-p2")
+        self.assertIn("conflicts with finding.run_id", str(cm.exception))
+
+        # 2. Conflicting explicit delivery_id vs finding.delivery_id
+        with self.assertRaises(ConflictingFindingError) as cm:
+            self.truth_store.record_initial(finding, initial_state=TruthState.HELD, delivery_id="deliv-p2")
+        self.assertIn("conflicts with finding.delivery_id", str(cm.exception))
+
+        # 3. Conflicting repository_id vs registered run context
+        finding_wrong_repo = _make_sample_finding(
+            canonical_id="can-ctx-wrong-repo",
+            repository_id="other-owner/other-repo",
+            run_id="run-p1",
+            delivery_id="deliv-p1",
+        )
+        with self.assertRaises(ConflictingFindingError) as cm:
+            self.truth_store.record_initial(finding_wrong_repo, initial_state=TruthState.HELD)
+        self.assertIn("conflicts with registered run repository", str(cm.exception))
+
+        # 4. Conflicting head_sha vs registered run context
+        finding_wrong_sha = _make_sample_finding(
+            canonical_id="can-ctx-wrong-sha",
+            head_sha="1111111111111111111111111111111111111111",
+            run_id="run-p1",
+            delivery_id="deliv-p1",
+        )
+        with self.assertRaises(ConflictingFindingError) as cm:
+            self.truth_store.record_initial(finding_wrong_sha, initial_state=TruthState.HELD)
+        self.assertIn("conflicts with registered run head_sha", str(cm.exception))
+
+    def test_timestamp_parity_roundtrip_truth_and_audit(self) -> None:
+        """Verify caller-supplied timestamps are persisted and read back with parity."""
+        self.truth_store.register_review_run(
+            run_id="run-ts",
+            repository_id="test-owner/test-repo",
+            pull_number=42,
+            head_sha="abcdef0123456789abcdef0123456789abcdef01",
+            base_sha="base0123456789abcdef0123456789abcdef01",
+            delivery_id="deliv-ts",
+        )
+        finding = _make_sample_finding(canonical_id="can-ts", run_id="run-ts", delivery_id="deliv-ts")
+        known_initial_ts = 1700000000.0
+        rec_init = self.truth_store.record_initial(finding, initial_state=TruthState.HELD, now=known_initial_ts)
+        self.assertAlmostEqual(known_initial_ts, rec_init.timestamp, delta=1.0)
+
+        # Read back from database
+        latest = self.truth_store.get_latest_state("can-ts")
+        self.assertIsNotNone(latest)
+        self.assertAlmostEqual(known_initial_ts, latest.timestamp, delta=1.0)
+
+        # Transition with distinct known timestamp
+        known_trans_ts = 1700003600.0
+        rec_trans = self.truth_store.record_transition(
+            "can-ts",
+            TruthState.APPROVED,
+            actor="time-tester",
+            now=known_trans_ts,
+        )
+        self.assertAlmostEqual(known_trans_ts, rec_trans.timestamp, delta=1.0)
+
+        # Read back history
+        hist = self.truth_store.get_history("can-ts")
+        self.assertEqual(2, len(hist))
+        self.assertAlmostEqual(known_initial_ts, hist[0].timestamp, delta=1.0)
+        self.assertAlmostEqual(known_trans_ts, hist[1].timestamp, delta=1.0)
+
+        # Audit event timestamp parity
+        known_event_ts = 1700007200.0
+        event = AuditEvent(
+            correlation_id="run-ts",
+            event_name="timestamp_check",
+            step="testing",
+            timestamp=known_event_ts,
+            details={"parity": True},
+        )
+        self.audit_spine.record_event(event, run_id="run-ts")
+        events = self.audit_spine.get_events("run-ts")
+        matching = [e for e in events if e.event_name == "timestamp_check"]
+        self.assertEqual(1, len(matching))
+        self.assertAlmostEqual(known_event_ts, matching[0].timestamp, delta=1.0)
+
     # =========================================================================
-    # D. CONCURRENCY RACES
+    # D. CONCURRENCY RACES & LOCK SAFETY
     # =========================================================================
+
+    def test_record_transition_advisory_lock_failure_fails_closed(self) -> None:
+        """Verify record_transition fails closed on advisory lock failure, rolls back, and leaves connection usable."""
+        self.truth_store.register_review_run(
+            run_id="run-lock",
+            repository_id="test-owner/test-repo",
+            pull_number=10,
+            head_sha="abcdef0123456789abcdef0123456789abcdef01",
+            base_sha="base0123456789abcdef0123456789abcdef01",
+            delivery_id="deliv-lock",
+        )
+        finding = _make_sample_finding(canonical_id="can-lock-fail", run_id="run-lock", delivery_id="deliv-lock")
+        self.truth_store.record_initial(finding, initial_state=TruthState.HELD)
+
+        # Simulate advisory lock failure
+        sim_conn = self.truth_store.connection_manager.get_connection()
+        sim_conn.fail_advisory_lock = True
+        try:
+            with self.assertRaises(ConcurrentTransitionError) as ctx:
+                self.truth_store.record_transition(
+                    "can-lock-fail",
+                    TruthState.APPROVED,
+                    actor="auditor",
+                )
+            self.assertIn("Failed to acquire advisory transaction lock", str(ctx.exception))
+        finally:
+            sim_conn.fail_advisory_lock = False
+
+        # Verify no transition row was persisted (history has only sequence 1)
+        hist = self.truth_store.get_history("can-lock-fail")
+        self.assertEqual(1, len(hist))
+        self.assertEqual(TruthState.HELD, hist[0].state)
+
+        # Verify connection is usable afterward and subsequent transition succeeds
+        rec = self.truth_store.record_transition(
+            "can-lock-fail",
+            TruthState.APPROVED,
+            actor="auditor",
+        )
+        self.assertEqual(TruthState.APPROVED, rec.state)
+        self.assertEqual(2, rec.sequence_id)
+        self.assertEqual(2, len(self.truth_store.get_history("can-lock-fail")))
+
+    def test_concurrent_record_transition_race(self) -> None:
+        """Verify concurrent workers calling record_transition serialize and sequence monotonically."""
+        self.truth_store.register_review_run(
+            run_id="run-race-trans",
+            repository_id="test-owner/test-repo",
+            pull_number=10,
+            head_sha="abcdef0123456789abcdef0123456789abcdef01",
+            base_sha="base0123456789abcdef0123456789abcdef01",
+            delivery_id="deliv-race-trans",
+        )
+        finding = _make_sample_finding(canonical_id="can-race-trans", run_id="run-race-trans", delivery_id="deliv-race-trans")
+        self.truth_store.record_initial(finding, initial_state=TruthState.HELD)
+
+        t1 = self.truth_store.record_transition("can-race-trans", TruthState.APPROVED, actor="worker-1")
+        t2 = self.truth_store.record_transition("can-race-trans", TruthState.PUBLISHED, actor="worker-2")
+
+        self.assertEqual(2, t1.sequence_id)
+        self.assertEqual(TruthState.APPROVED, t1.state)
+        self.assertEqual(3, t2.sequence_id)
+        self.assertEqual(TruthState.PUBLISHED, t2.state)
+
+        history = self.truth_store.get_history("can-race-trans")
+        self.assertEqual(3, len(history))
+        self.assertEqual([1, 2, 3], [h.sequence_id for h in history])
 
     def test_concurrent_record_initial_race(self) -> None:
         """Verify concurrent workers calling record_initial for same canonical_id produce exactly one sequence 1."""
