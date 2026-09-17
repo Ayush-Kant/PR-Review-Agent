@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "de40ae71f68871ae01b5789541b3f4adfa68fd5b",
-  "sourceHash": "4e9c570611aa09615e7e5fe6b35ec83e212a2c3455260bc3baed70485ca4d066",
+  "revision": "d64465469985aea0a640076ddeabae1f1f92efc8",
+  "sourceHash": "e22b79940cbb82003412ca7a893017f26dce941df04325bb38065ca79476ae50",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -57,7 +57,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "fb887317dd97d82dc3f0e2f70eec001c38472ea080c6b568d5382f3d566ae512"
+      "contentHash": "bd81891a7189789b24e31e43ea587bee17b86a661745d3aafe3e1e7d5bff60ec"
     },
     {
       "id": "file:pr_review_agent/adapters/redis_queue.py",
@@ -367,7 +367,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "ca19ae5631fc42fc0ecb94bbad0c1bdc51a6a1b304244db62df338e7ad22438d"
+      "contentHash": "e5aa9fc5b56c059f2127975478ffad4332ef1476d7e19d8766a43a83bd66dba7"
     },
     {
       "id": "file:tests/test_redis_queue_adapter.py",

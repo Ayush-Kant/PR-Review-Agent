@@ -221,7 +221,9 @@ class RedisCheckpointSaver(
                 raise CheckpointStorageError(f"Failed to read blob for channel '{k}': {exc}") from exc
 
             if not b_data:
-                continue
+                raise CheckpointDeserializationError(
+                    f"Missing channel blob for channel '{k}' version '{ver}' in thread '{thread_id}'"
+                )
 
             b_type = self._to_str(b_data.get(b"type") or b_data.get("type"))
             if b_type == "empty":
@@ -495,10 +497,39 @@ class RedisCheckpointSaver(
             except Exception as exc:
                 raise CheckpointStorageError(f"Failed to query index for thread {thread_id}: {exc}") from exc
 
+            # Chronological filtering by `before`:
+            # `zrevrange` returns checkpoint IDs ordered chronologically from newest to oldest.
+            # `before` specifies a checkpoint configuration; only checkpoints created
+            # strictly before that checkpoint in the chronological order should be returned.
+            if before_checkpoint_id:
+                if before_checkpoint_id in cp_ids:
+                    before_idx = cp_ids.index(before_checkpoint_id)
+                    cp_ids = cp_ids[before_idx + 1 :]
+                else:
+                    try:
+                        before_score = (
+                            self.client.zscore(index_key, before_checkpoint_id)
+                            if hasattr(self.client, "zscore")
+                            else None
+                        )
+                    except Exception:
+                        before_score = None
+
+                    if before_score is not None:
+                        filtered = []
+                        for m in cp_ids:
+                            try:
+                                s = self.client.zscore(index_key, m)
+                            except Exception:
+                                s = None
+                            if s is not None and s < before_score:
+                                filtered.append(m)
+                        cp_ids = filtered
+                    else:
+                        cp_ids = []
+
             for cp_id in cp_ids:
                 if config_checkpoint_id and cp_id != config_checkpoint_id:
-                    continue
-                if before_checkpoint_id and cp_id >= before_checkpoint_id:
                     continue
 
                 tup = self.get_tuple({

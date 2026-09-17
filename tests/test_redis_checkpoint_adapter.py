@@ -137,6 +137,12 @@ class InMemoryRedisCheckpointClient:
                 return members[start:]
             return members[start : stop + 1]
 
+    def zscore(self, name: str, member: Any) -> float | None:
+        self._ensure_open()
+        with self._lock:
+            z = self._zsets.get(name, {})
+            return z.get(str(member))
+
     def sadd(self, name: str, *values: Any) -> int:
         self._ensure_open()
         with self._lock:
@@ -439,6 +445,82 @@ class RedisCheckpointAdapterUnitTests(unittest.TestCase):
         with self.assertRaises(CheckpointDeserializationError):
             self.saver.get_tuple(config)
 
+    def test_missing_channel_blob_raises_checkpoint_deserialization_error(self) -> None:
+        """Missing channel blob referenced by checkpoint fails closed with CheckpointDeserializationError."""
+        config = {"configurable": {"thread_id": "thread-missing-blob"}}
+        cp = empty_checkpoint()
+        cp["id"] = "cp-valid-1"
+        cp["channel_values"] = {"ch1": "val1", "ch2": "val2"}
+        new_versions = {"ch1": 1, "ch2": 1}
+
+        self.saver.put(config, cp, {}, new_versions)
+
+        # Confirm get_tuple works normally first
+        tup = self.saver.get_tuple(config)
+        self.assertIsNotNone(tup)
+        self.assertEqual("val1", tup.checkpoint["channel_values"].get("ch1"))
+        self.assertEqual("val2", tup.checkpoint["channel_values"].get("ch2"))
+
+        # Remove one referenced channel blob from Redis
+        blob_key = self.saver._blob_key("thread-missing-blob", "", "ch1", 1)
+        self.redis_client.delete(blob_key)
+
+        # Verify get_tuple fails closed with CheckpointDeserializationError (never silently reconstructs partial state)
+        with self.assertRaises(CheckpointDeserializationError):
+            self.saver.get_tuple(config)
+
+    def test_list_before_filters_chronologically_not_lexically(self) -> None:
+        """list(before=...) filters checkpoints strictly in chronological order, not lexical order."""
+        config = {"configurable": {"thread_id": "thread-chrono-list"}}
+
+        # Checkpoint IDs that are intentionally non-lexical relative to chronological creation:
+        # 1. cp-z-oldest (created at t=100) -> lexically last ('z')
+        # 2. cp-a-middle (created at t=200) -> lexically first ('a')
+        # 3. cp-m-newest (created at t=300) -> lexically middle ('m')
+        #
+        # Chronological order (newest to oldest): ['cp-m-newest', 'cp-a-middle', 'cp-z-oldest']
+        # Lexical order: ['cp-a-middle', 'cp-m-newest', 'cp-z-oldest']
+        cp1 = empty_checkpoint()
+        cp1["id"] = "cp-z-oldest"
+        cp1["channel_values"] = {"v": 1}
+        self.saver.put(config, cp1, {}, {"v": 1})
+        self.redis_client.zadd(self.saver._index_key("thread-chrono-list", ""), {"cp-z-oldest": 100.0})
+
+        cp2 = empty_checkpoint()
+        cp2["id"] = "cp-a-middle"
+        cp2["channel_values"] = {"v": 2}
+        self.saver.put(config, cp2, {}, {"v": 2})
+        self.redis_client.zadd(self.saver._index_key("thread-chrono-list", ""), {"cp-a-middle": 200.0})
+
+        cp3 = empty_checkpoint()
+        cp3["id"] = "cp-m-newest"
+        cp3["channel_values"] = {"v": 3}
+        self.saver.put(config, cp3, {}, {"v": 3})
+        self.redis_client.zadd(self.saver._index_key("thread-chrono-list", ""), {"cp-m-newest": 300.0})
+
+        # 1. List without before: yields all 3 from newest to oldest
+        all_cps = [t.checkpoint["id"] for t in self.saver.list(config)]
+        self.assertEqual(["cp-m-newest", "cp-a-middle", "cp-z-oldest"], all_cps)
+
+        # 2. List with before=cp-a-middle:
+        # Chronologically older than cp-a-middle is ONLY cp-z-oldest.
+        # Under old lexical comparison ("cp-z-oldest" >= "cp-a-middle"), cp-z-oldest was incorrectly filtered out!
+        before_middle = {"configurable": {"thread_id": "thread-chrono-list", "checkpoint_id": "cp-a-middle"}}
+        cps_before_middle = [t.checkpoint["id"] for t in self.saver.list(config, before=before_middle)]
+        self.assertEqual(["cp-z-oldest"], cps_before_middle)
+
+        # 3. List with before=cp-m-newest:
+        # Chronologically older than cp-m-newest are cp-a-middle and cp-z-oldest (in that order)
+        before_newest = {"configurable": {"thread_id": "thread-chrono-list", "checkpoint_id": "cp-m-newest"}}
+        cps_before_newest = [t.checkpoint["id"] for t in self.saver.list(config, before=before_newest)]
+        self.assertEqual(["cp-a-middle", "cp-z-oldest"], cps_before_newest)
+
+        # 4. List with before=cp-z-oldest:
+        # Nothing is older than cp-z-oldest
+        before_oldest = {"configurable": {"thread_id": "thread-chrono-list", "checkpoint_id": "cp-z-oldest"}}
+        cps_before_oldest = [t.checkpoint["id"] for t in self.saver.list(config, before=before_oldest)]
+        self.assertEqual([], cps_before_oldest)
+
     def test_concurrent_independent_workflow_checkpointing(self) -> None:
         """18. Concurrent independent workflow checkpointing."""
         errors: list[Exception] = []
@@ -526,7 +608,7 @@ class RedisCheckpointAdapterGraphIntegrationTests(unittest.IsolatedAsyncioTestCa
         self.assertTrue(saved_state.values.get("aggregation_invoked"))
 
     async def test_workflow_resume_avoids_replaying_completed_nodes(self) -> None:
-        """9, 10, 11 & 13. PRIMARY ACCEPTANCE CRITERIA: Crash recovery and no duplicate fan-out."""
+        """9, 10, 11 & 13. PRIMARY ACCEPTANCE CRITERIA: Mid-workflow crash recovery and no duplicate fan-out."""
         execution_counts = {
             "initialize": 0,
             SpecialistType.SECURITY: 0,
@@ -573,44 +655,145 @@ class RedisCheckpointAdapterGraphIntegrationTests(unittest.IsolatedAsyncioTestCa
             state=JobState.RUNNING,
         )
 
-        # --- RUN 1: Worker 1 executes review run to completion ---
+        class SimulatedWorkerCrash(RuntimeError):
+            """Uncaught process crash simulated before terminal node execution."""
+
+        # --- STEP 1: Worker 1 executes initialize and specialists, then crashes BEFORE evaluate_terminal completes ---
         worker_1_orchestrator = ReviewOrchestrator(
             specialist_handlers=handlers,
             checkpointer=self.saver,
         )
-        res_1 = await worker_1_orchestrator.execute_run(job, snapshot)
-        self.assertEqual("completed", res_1.terminal_status)
 
-        # Record initial execution counts
-        initial_counts = dict(execution_counts)
-        for spec in SpecialistType:
-            self.assertEqual(1, initial_counts[spec], f"Specialist {spec.value} should have run exactly once")
+        orig_init_1 = worker_1_orchestrator._node_initialize
 
-        # --- SIMULATE RESTART: Worker 1 process dies; Worker 2 starts fresh with SAME thread_id ---
-        # Worker 2 creates a new ReviewOrchestrator instance sharing the same Redis checkpointer
+        async def counting_init_1(state: Any) -> dict:
+            execution_counts["initialize"] += 1
+            return await orig_init_1(state)
+
+        worker_1_orchestrator._node_initialize = counting_init_1
+
+        # Instrument Worker 1 evaluate_terminal node to simulate unhandled worker crash
+        # before evaluate_terminal executes or increments its counter
+        async def crashing_evaluate_terminal(state: Any) -> dict:
+            raise SimulatedWorkerCrash("Worker 1 crashed after specialist checkpointing before evaluate_terminal")
+
+        worker_1_orchestrator._node_evaluate_terminal = crashing_evaluate_terminal
+
+        # Worker 1 executes and is interrupted by the simulated process crash
+        with self.assertRaises(SimulatedWorkerCrash):
+            await worker_1_orchestrator.execute_run(job, snapshot)
+
+        # --- PROVE INTERMEDIATE EXECUTION COUNTS BEFORE INTERRUPTION ---
+        self.assertEqual(1, execution_counts["initialize"])
+        self.assertEqual(1, execution_counts[SpecialistType.SECURITY])
+        self.assertEqual(1, execution_counts[SpecialistType.QUALITY])
+        self.assertEqual(1, execution_counts[SpecialistType.TESTS])
+        self.assertEqual(1, execution_counts[SpecialistType.DOCUMENTATION])
+        self.assertEqual(0, execution_counts["evaluate_terminal"])
+
+        # Verify intermediate checkpoint exists in Redis with all 4 specialist outputs checkpointed
+        intermediate_tup = self.saver.get_tuple({"configurable": {"thread_id": job.job_id}})
+        self.assertIsNotNone(intermediate_tup)
+        saved_outputs = intermediate_tup.checkpoint["channel_values"].get("specialist_outputs", {})
+        self.assertEqual(4, len(saved_outputs))
+
+        # --- STEP 2: Worker 1 disappears; Worker 2 starts fresh with SAME thread_id ---
+        del worker_1_orchestrator
+
         worker_2_orchestrator = ReviewOrchestrator(
             specialist_handlers=handlers,
             checkpointer=self.saver,
         )
 
-        # Worker 2 executes the same ReviewJob (same thread_id)
+        orig_init_2 = worker_2_orchestrator._node_initialize
+
+        async def counting_init_2(state: Any) -> dict:
+            execution_counts["initialize"] += 1
+            return await orig_init_2(state)
+
+        worker_2_orchestrator._node_initialize = counting_init_2
+
+        orig_term_2 = worker_2_orchestrator._node_evaluate_terminal
+
+        async def counting_term_2(state: Any) -> dict:
+            execution_counts["evaluate_terminal"] += 1
+            return await orig_term_2(state)
+
+        worker_2_orchestrator._node_evaluate_terminal = counting_term_2
+
+        # Worker 2 executes the same ReviewJob (same job_id / thread_id)
         res_2 = await worker_2_orchestrator.execute_run(job, snapshot)
+
+        # --- PROVE FINAL EXECUTION COUNTS AFTER WORKER 2 COMPLETES ---
+        # 1. Completed specialist nodes and initialize were NOT re-executed
+        self.assertEqual(1, execution_counts["initialize"])
+        self.assertEqual(1, execution_counts[SpecialistType.SECURITY])
+        self.assertEqual(1, execution_counts[SpecialistType.QUALITY])
+        self.assertEqual(1, execution_counts[SpecialistType.TESTS])
+        self.assertEqual(1, execution_counts[SpecialistType.DOCUMENTATION])
+        # 2. Only unfinished graph work (evaluate_terminal) executed after restart
+        self.assertEqual(1, execution_counts["evaluate_terminal"])
+
+        # 3. Workflow reached terminal completed state
         self.assertEqual("completed", res_2.terminal_status)
+        self.assertTrue(res_2.aggregation_invoked)
+        self.assertEqual(4, len(res_2.specialist_outputs))
+        for spec_type in SpecialistType:
+            self.assertIn(spec_type, res_2.specialist_outputs)
+            self.assertEqual(SpecialistStatus.COMPLETED, res_2.specialist_outputs[spec_type].status)
+            self.assertEqual(1, len(res_2.specialist_outputs[spec_type].findings))
 
-        # --- VERIFY CRITICAL INVARIANT: Completed work was NOT replayed! ---
-        # Execution counts must NOT have incremented!
-        for spec in SpecialistType:
-            self.assertEqual(
-                initial_counts[spec],
-                execution_counts[spec],
-                f"Specialist {spec.value} re-executed during resume! Duplication detected!",
+    async def test_missing_channel_blob_on_workflow_resume_fails_closed(self) -> None:
+        """Missing channel blob during workflow resume raises CheckpointDeserializationError and fails closed."""
+        handlers = {
+            spec: lambda inp, s=spec: SpecialistOutput(
+                specialist_type=s,
+                correlation_id=inp.correlation_id,
+                status=SpecialistStatus.COMPLETED,
             )
+            for spec in SpecialistType
+        }
 
-        # Findings must match and not be duplicated
-        self.assertEqual(
-            len(res_1.specialist_outputs),
-            len(res_2.specialist_outputs),
+        snapshot = sample_snapshot(head_sha="sha-blob-fail-closed")
+        job = ReviewJob(
+            job_id="job-blob-fail-closed-1",
+            delivery_id="del-blob-fail-1",
+            repository_id="octocat/hello-world",
+            pull_request_number=1,
+            base_sha="base-1",
+            head_sha="sha-blob-fail-closed",
+            state=JobState.RUNNING,
         )
+
+        class SimulatedWorkerCrash(RuntimeError):
+            pass
+
+        worker_1 = ReviewOrchestrator(specialist_handlers=handlers, checkpointer=self.saver)
+
+        async def crashing_evaluate_terminal(state: Any) -> dict:
+            raise SimulatedWorkerCrash("Crash before evaluate_terminal")
+
+        worker_1._node_evaluate_terminal = crashing_evaluate_terminal
+
+        with self.assertRaises(SimulatedWorkerCrash):
+            await worker_1.execute_run(job, snapshot)
+
+        # Confirm checkpoint exists
+        tup = self.saver.get_tuple({"configurable": {"thread_id": job.job_id}})
+        self.assertIsNotNone(tup)
+        versions = tup.checkpoint.get("channel_versions", {})
+        self.assertIn("specialist_outputs", versions)
+
+        # Corrupt / delete the specialist_outputs blob from Redis
+        ver = versions["specialist_outputs"]
+        blob_key = self.saver._blob_key(job.job_id, "", "specialist_outputs", ver)
+        self.redis_client.delete(blob_key)
+
+        # Worker 2 attempts resume: MUST fail closed with CheckpointDeserializationError,
+        # never silently continue or look like a fresh clean workflow
+        worker_2 = ReviewOrchestrator(specialist_handlers=handlers, checkpointer=self.saver)
+        with self.assertRaises(CheckpointDeserializationError):
+            await worker_2.execute_run(job, snapshot)
 
     async def test_no_checkpointer_behavior_remains_unchanged(self) -> None:
         """20. Existing no-checkpointer behavior remains unchanged for backwards compatibility."""
