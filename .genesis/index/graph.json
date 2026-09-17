@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "83b9be6a2272b04206a73a8b2aced54ead911e81",
-  "sourceHash": "b15cb321fa7721e0fb492c0a72ade491305410035abdcd04b1d04bb174e85497",
+  "revision": "0dc6f626bcf44b708ce7e2bc6599f5722c4013d6",
+  "sourceHash": "078cdd01b13b55c469b2d510efd4cf2771b0fa761d98eb51867cde04f1820e28",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -378,6 +378,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "95094f30111a353bcedc03e903eded8b05a484e2fc221be76df9eb88a1d9147f"
+    },
+    {
+      "id": "file:tests/test_production_fault_injection.py",
+      "type": "file",
+      "label": "tests/test_production_fault_injection.py",
+      "path": "tests/test_production_fault_injection.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "e98c5ec3907669906e82886fbf00d218370bc2112fd2b70cc0787b2acb196978"
     },
     {
       "id": "file:tests/test_queue_and_checkpoint_contracts.py",

@@ -38,6 +38,7 @@ digraph genesis {
   "file:tests/test_live_golden_evaluation.py" [label="tests/test_live_golden_evaluation.py",class="file"];
   "file:tests/test_live_pr_validation.py" [label="tests/test_live_pr_validation.py",class="file"];
   "file:tests/test_network_adapters.py" [label="tests/test_network_adapters.py",class="file"];
+  "file:tests/test_production_fault_injection.py" [label="tests/test_production_fault_injection.py",class="file"];
   "file:tests/test_queue_and_checkpoint_contracts.py" [label="tests/test_queue_and_checkpoint_contracts.py",class="file"];
   "file:tests/test_redis_checkpoint_adapter.py" [label="tests/test_redis_checkpoint_adapter.py",class="file"];
   "file:tests/test_redis_queue_adapter.py" [label="tests/test_redis_queue_adapter.py",class="file"];

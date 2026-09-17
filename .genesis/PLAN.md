@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-17T19:15:49.326Z
+- plan approval: Ayush Kant at 2026-09-17T19:43:03.535Z
 
 ## Tasks
 
@@ -174,5 +174,13 @@
 - requirements: FR-15
 - scope: pr_review_agent/migrations/002_repository_revisions.sql, pr_review_agent/retrieval.py, pr_review_agent/observability.py, pr_review_agent/adapters/tiger_stores.py, pr_review_agent/adapters/__init__.py, tests/test_tiger_data_adapters.py, tests/test_tiger_schema_and_connection.py
 - gates: test: python -m pytest tests/test_tiger_data_adapters.py, independent-review: pass
+- next: Run the task pre-flight.
+
+### production-infrastructure-fault-injection — Production infrastructure fault injection and reliability proof
+
+- state/risk: done / low
+- requirements: NFR-03, FR-03, FR-05, FR-12, FR-14, FR-15, NFR-01
+- scope: not bounded
+- gates: test: python -m pytest tests/test_production_fault_injection.py
 - next: Run the task pre-flight.
 
