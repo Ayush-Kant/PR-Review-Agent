@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping, Sequence
 import concurrent.futures
+import dataclasses
 import json
 import os
 import sqlite3
@@ -97,6 +98,52 @@ from tests.test_tiger_data_adapters import (
     TigerPostgresSimulationConnection,
     _make_sample_finding,
 )
+
+AUTH_DIFF = """diff --git a/src/auth.py b/src/auth.py
+--- a/src/auth.py
++++ b/src/auth.py
+@@ -10,6 +10,6 @@
++line 10
++line 11
++line 12
++line 13
++line 14
++line 15
+"""
+
+
+def _make_canonical(
+    canonical_id: str = "can-test-1",
+    repository_id: str = "octocat/hello-world",
+    head_sha: str = "head-sha-valid",
+    file_path: str = "src/auth.py",
+    line_range: tuple[int, int] = (10, 15),
+    category: str = "quality",
+    severity: str = "medium",
+    confidence: float = 0.90,
+    summary: str = "Code quality recommendation",
+    rationale: str = "Refactor for clarity and testability.",
+    evidence_refs: tuple[str, ...] = ("diff://src/auth.py#L10-L15",),
+    remediation: str | None = "Refactor method.",
+    disposition: FindingDisposition = FindingDisposition.AUTO_APPROVED,
+) -> CanonicalFinding:
+    return CanonicalFinding(
+        canonical_id=canonical_id,
+        repository_id=repository_id,
+        head_sha=head_sha,
+        category=category,
+        severity=severity,
+        confidence=confidence,
+        summary=summary,
+        rationale=rationale,
+        file_path=file_path,
+        line_range=line_range,
+        contributing_candidate_ids=("cand-1",),
+        contributing_specialists=("quality",),
+        evidence_refs=evidence_refs,
+        remediation=remediation,
+        disposition=disposition,
+    )
 
 
 # ============================================================================
@@ -227,12 +274,18 @@ class FaultInjectingGitHubClient(FakeGitHubClient):
         *,
         should_fail_api: bool = False,
         api_error_message: str = "Simulated GitHub API failure",
+        diff_content: str = AUTH_DIFF,
     ) -> None:
         super().__init__(pr_heads, should_fail_api=should_fail_api, api_error_message=api_error_message)
+        self.diff_content = diff_content
         self.simulate_ambiguous_creation: bool = False
         self.fail_create_review: bool = False
         self.head_sha_move_to: str | None = None
         self.create_review_calls: int = 0
+        self.create_comment_calls: int = 0
+
+    def get_pull_request_diff(self, repository_id: str, pull_number: int) -> str:
+        return self.diff_content
 
     def get_pull_request_head_sha(self, repository_id: str, pull_number: int) -> str:
         if self.head_sha_move_to is not None:
@@ -280,8 +333,12 @@ class FaultInjectingGitHubClient(FakeGitHubClient):
         *,
         body: str,
     ) -> Any:
+        self.create_comment_calls += 1
         if self.fail_create_review:
             raise ConnectionResetError("Simulated TCP reset during issue comment creation")
+        if self.simulate_ambiguous_creation:
+            super().create_issue_comment(repository_id, pull_number, body=body)
+            raise ConnectionResetError("Simulated TCP reset after GitHub accepted comment request")
         return super().create_issue_comment(repository_id, pull_number, body=body)
 
 
@@ -825,6 +882,7 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
         audit_spine: Any = None,
         publisher: Any = None,
         handlers: Any = None,
+        publish_enabled: bool = False,
     ) -> AutonomousReviewWorker:
         effective_truth = truth_store or ReviewTruthStore(sqlite3.connect(":memory:"))
         effective_audit = audit_spine or AuditSpine(sqlite3.connect(":memory:"))
@@ -833,26 +891,28 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
             effective_truth,
             self.github_client,
         )
+        effective_cfg = dataclasses.replace(self.cfg, publish_enabled=publish_enabled) if publish_enabled else self.cfg
         return AutonomousReviewWorker(
-            self.cfg,
+            effective_cfg,
             connection=sqlite3.connect(":memory:"),
             github_client=self.github_client,
             specialist_handlers=handlers or {
-                SpecialistType.SECURITY: _make_mock_specialist([
+                SpecialistType.SECURITY: _make_mock_specialist(),
+                SpecialistType.QUALITY: _make_mock_specialist([
                     CandidateFinding(
-                        finding_id="f-sec-1",
+                        finding_id="f-qual-1",
                         correlation_id="del-1",
-                        specialist_type=SpecialistType.SECURITY,
-                        category="security",
-                        severity="high",
+                        specialist_type=SpecialistType.QUALITY,
+                        category="quality",
+                        severity="medium",
                         confidence=0.95,
-                        summary="SQL injection found",
+                        summary="Code improvement recommendation",
                         rationale="Diff analysis",
                         file_path="src/auth.py",
                         line_range=(10, 15),
+                        evidence_refs=("diff://src/auth.py#L10-L15",),
                     )
                 ]),
-                SpecialistType.QUALITY: _make_mock_specialist(),
                 SpecialistType.TESTS: _make_mock_specialist(),
                 SpecialistType.DOCUMENTATION: _make_mock_specialist(),
             },
@@ -907,17 +967,32 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
     # Scenario 2: Tiger succeeds, Redis acknowledgement/completion fails
     # ------------------------------------------------------------------------
     async def test_scenario_2_tiger_succeeds_redis_ack_fails(self) -> None:
-        """Findings recorded in Tiger, but Redis drops connection during mark_completed.
+        """Findings recorded in TigerReviewTruthStore, but Redis drops connection during mark_completed.
         On retry, Tiger re-records findings idempotently and effect table prevents duplicate comment.
         """
         now = 1000.0
         snapshot = sample_snapshot(repo_id="octocat/hello-world", head_sha="head-sha-valid")
         job = self.queue.enqueue(snapshot, "del-scen-2", now=now)
 
+        # Wire real TigerReviewTruthStore with parent run context resolver
+        tiger_truth = TigerReviewTruthStore(
+            self.tiger_mgr,
+            run_context_resolver=lambda _: ReviewRunContext(
+                run_id="run-scen-2",
+                repository_id="octocat/hello-world",
+                pull_number=101,
+                head_sha="head-sha-valid",
+                base_sha="base-sha-valid",
+                delivery_id="del-scen-2",
+            ),
+        )
         sqlite_conn = sqlite3.connect(":memory:")
-        truth_store = ReviewTruthStore(sqlite_conn)
-        publisher = GitHubReviewPublisher(sqlite_conn, truth_store, self.github_client)
-        worker = self._create_full_worker(truth_store=truth_store, publisher=publisher)
+        publisher = GitHubReviewPublisher(sqlite_conn, tiger_truth, self.github_client)
+        worker = self._create_full_worker(
+            truth_store=tiger_truth,
+            publisher=publisher,
+            publish_enabled=True,
+        )
 
         # Attempt 1: Claim and execute, but Redis drops on mark_completed
         job_claimed, token = self.queue.claim_job(job.job_id, now=now)
@@ -926,15 +1001,17 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(redis.RedisError):
             await worker.process_claimed_job(job_claimed, lease_token=token, now=now)
 
-        # Tiger/SQLite truth was persisted
-        all_canonical = truth_store.list_all_canonical()
-        self.assertGreaterEqual(len(all_canonical), 1)
+        # 1. Tiger truth was persisted into Tiger PostgreSQL simulation tables
+        cur = self.tiger_conn.execute("SELECT canonical_id, sequence_id, state FROM finding_records")
+        rows = cur.fetchall()
+        self.assertGreaterEqual(len(rows), 1)
+        can_id = rows[0]["canonical_id"]
 
-        # Redis recovers; lease expires; zombie recovery reschedules
+        # 2. Redis recovers; lease expires; zombie recovery reschedules
         self.redis_client.error_on_methods.clear()
         self.queue.recover_zombie_jobs(now=now + 100.0)
 
-        # Attempt 2: Re-execution by second worker
+        # 3. Attempt 2: Re-execution by second worker
         job_retry, token_retry = self.queue.claim_job(job.job_id, now=now + 101.0)
         state_retry = await worker.process_claimed_job(job_retry, lease_token=token_retry, now=now + 101.0)
 
@@ -942,8 +1019,21 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
         final_job = self.queue.get_job(job.job_id)
         self.assertEqual(JobState.COMPLETED, final_job.state)
 
-        # ZERO DUPLICATE GITHUB REVIEWS (only 1 review was ever created)
-        self.assertLessEqual(self.github_client.create_review_calls, 1)
+        # 4. Tiger truth is replay-safe and idempotent: no duplicate sequence or duplicate record created
+        cur_after = self.tiger_conn.execute(
+            "SELECT canonical_id, sequence_id, state FROM finding_records WHERE canonical_id = ? ORDER BY sequence_id ASC",
+            (can_id,),
+        )
+        rows_after = cur_after.fetchall()
+        self.assertEqual(2, len(rows_after), "Tiger created duplicate sequence record on retry!")
+        self.assertEqual(1, rows_after[0]["sequence_id"])
+        self.assertEqual("auto_approved", rows_after[0]["state"])
+        self.assertEqual(2, rows_after[1]["sequence_id"])
+        self.assertEqual("published", rows_after[1]["state"])
+
+        # 5. ZERO duplicate GitHub reviews (only 1 review was ever created)
+        self.assertEqual(1, len(self.github_client.reviews))
+        self.assertEqual(1, self.github_client.create_review_calls)
 
     # ------------------------------------------------------------------------
     # Scenario 3: Worker crashes after checkpoint
@@ -1049,8 +1139,8 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
     # Scenario 5: Worker crashes after GitHub publication
     # ------------------------------------------------------------------------
     async def test_scenario_5_worker_crashes_after_github_publication(self) -> None:
-        """GitHub review was created, but worker crashes before queue completion.
-        On retry, publisher reconciles with GitHub, detects existing review, and returns ALREADY_PUBLISHED.
+        """Worker publishes review finding to GitHub, then crashes before completing queue mutation.
+        On subsequent worker retry, publisher reconciles with existing publication state and emits ZERO duplicate reviews.
         """
         now = 1000.0
         snapshot = sample_snapshot(repo_id="octocat/hello-world", head_sha="head-sha-valid")
@@ -1059,45 +1149,36 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
         sqlite_conn = sqlite3.connect(":memory:")
         truth_store = ReviewTruthStore(sqlite_conn)
         publisher = GitHubReviewPublisher(sqlite_conn, truth_store, self.github_client)
+        worker = self._create_full_worker(
+            truth_store=truth_store,
+            publisher=publisher,
+            publish_enabled=True,
+        )
 
-        finding = _make_sample_finding(
-            canonical_id="can-scen-5",
-            repository_id="octocat/hello-world",
-            head_sha="head-sha-valid",
-        )
-        truth_store.record_initial(finding, initial_state=TruthState.APPROVED)
+        # Attempt 1: Worker claims job and executes publication, but crashes right before queue ACK
+        job_claimed, token = self.queue.claim_job(job.job_id, now=now)
+        self.redis_client.error_on_methods.add("hset")  # Intercepts mark_completed to simulate post-publish crash
 
-        # Pre-create review on GitHub with idempotency tag
-        idemp_key = publisher.compute_idempotency_key(
-            finding.repository_id,
-            101,
-            finding.head_sha,
-            finding.canonical_id,
-        )
-        self.github_client.create_review(
-            finding.repository_id,
-            101,
-            commit_sha=finding.head_sha,
-            body=f"Pre-existing review\n<!-- pr-review-agent-idempotency: {idemp_key} -->",
-        )
+        with self.assertRaises(redis.RedisError):
+            await worker.process_claimed_job(job_claimed, lease_token=token, now=now)
+
+        # Publication succeeded on GitHub in Attempt 1
         self.assertEqual(1, len(self.github_client.reviews))
+        self.assertEqual(1, self.github_client.create_review_calls)
 
-        # Simulate publisher having pre-committed PENDING state before a crash
-        publisher._record_effect_and_result(
-            status=PublicationStatus.PENDING,
-            idempotency_key=idemp_key,
-            finding=finding,
-            pull_number=101,
-            reason="Publication in flight",
-            now=now,
-        )
+        # Worker crashed/died; lease expires in Redis and zombie recovery reschedules
+        self.redis_client.error_on_methods.clear()
+        self.queue.recover_zombie_jobs(now=now + 100.0)
 
-        # Worker runs publication step
-        res = publisher.publish_finding(finding, pull_number=101, now=now + 5.0)
+        # Attempt 2: Second worker claims job on retry and executes full pipeline
+        job_retry, token_retry = self.queue.claim_job(job.job_id, now=now + 101.0)
+        state_retry = await worker.process_claimed_job(job_retry, lease_token=token_retry, now=now + 101.0)
 
-        # Reconciled without duplicate review call
-        self.assertEqual(PublicationStatus.ALREADY_PUBLISHED, res.status)
-        self.assertEqual(1, len(self.github_client.reviews))  # Count remains 1!
+        self.assertEqual("completed", state_retry.terminal_status)
+        # ZERO DUPLICATE REVIEWS (count remains strictly 1)
+        self.assertEqual(1, len(self.github_client.reviews))
+        self.assertEqual(1, self.github_client.create_review_calls)
+        self.assertEqual(JobState.COMPLETED, self.queue.get_job(job.job_id).state)
 
     # ------------------------------------------------------------------------
     # Scenario 6: Duplicate delivery occurs during recovery
@@ -1125,21 +1206,63 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
     # Scenario 7: Retry occurs after partial Tiger persistence
     # ------------------------------------------------------------------------
     def test_scenario_7_retry_after_partial_tiger_persistence(self) -> None:
-        """Worker crashed after 1 specialist output written to audit spine.
-        On retry, audit spine append-only records new attempt events, deduplication aggregates findings.
+        """Worker commits partial business state to Tiger (Finding A + Audit event), then crashes before complete review state is committed.
+        On retry, existing Tiger state is handled idempotently, remaining state commits cleanly, and audit history remains reconstructable.
         """
         now = 1000.0
+        # Register review run in TigerReviewTruthStore
+        self.tiger_truth.register_review_run(
+            run_id="run-scen-7",
+            repository_id="octocat/hello-world",
+            pull_number=101,
+            head_sha="head-sha-valid",
+            base_sha="base-sha-valid",
+            delivery_id="del-scen-7",
+        )
+
+        # Attempt 1 begins
         self.tiger_audit.record_event(
             AuditEvent(
                 correlation_id="del-scen-7",
-                event_name="specialist_completed",
-                step="security",
+                event_name="attempt_started",
+                step="worker",
                 timestamp=now,
-                details={"specialist": "security", "findings": 1},
+                details={"attempt": 1},
             )
         )
 
-        # Worker crashed; retry begins new attempt
+        # Commit Finding A to Tiger
+        finding_a = _make_sample_finding(
+            canonical_id="can-scen-7-a",
+            repository_id="octocat/hello-world",
+            head_sha="head-sha-valid",
+            run_id="run-scen-7",
+            delivery_id="del-scen-7",
+        )
+        self.tiger_truth.record_initial(finding_a, initial_state=TruthState.HELD)
+        self.tiger_audit.record_event(
+            AuditEvent(
+                correlation_id="del-scen-7",
+                event_name="finding_persisted",
+                step="truth_store",
+                timestamp=now + 1.0,
+                details={"canonical_id": finding_a.canonical_id},
+            )
+        )
+
+        # Worker crashes before Finding B is recorded
+        finding_b = _make_sample_finding(
+            canonical_id="can-scen-7-b",
+            repository_id="octocat/hello-world",
+            head_sha="head-sha-valid",
+            run_id="run-scen-7",
+            delivery_id="del-scen-7",
+        )
+        # Verify partial persistence: Finding A committed, Finding B absent
+        self.assertIsNotNone(self.tiger_truth.get_latest_state("can-scen-7-a"))
+        self.assertIsNone(self.tiger_truth.get_latest_state("can-scen-7-b"))
+
+        # Attempt 2: Worker retry begins
         self.tiger_audit.record_event(
             AuditEvent(
                 correlation_id="del-scen-7",
@@ -1150,10 +1273,55 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
             )
         )
 
+        # Re-recording Finding A is idempotent (returns existing record without creating duplicate sequence)
+        rec_a = self.tiger_truth.record_initial(finding_a, initial_state=TruthState.HELD)
+        self.assertEqual(1, rec_a.sequence_id)
+
+        # Finding B now records cleanly
+        rec_b = self.tiger_truth.record_initial(finding_b, initial_state=TruthState.HELD)
+        self.assertEqual(1, rec_b.sequence_id)
+
+        # Both findings transition to APPROVED according to policy state machine
+        self.tiger_truth.record_transition(
+            finding_a.canonical_id,
+            TruthState.APPROVED,
+            actor="reviewer",
+            rationale="Approved",
+            now=now + 12.0,
+        )
+        self.tiger_truth.record_transition(
+            finding_b.canonical_id,
+            TruthState.APPROVED,
+            actor="reviewer",
+            rationale="Approved",
+            now=now + 12.0,
+        )
+
+        # Assert zero duplicate canonical findings and exact sequence history
+        cur_a = self.tiger_conn.execute(
+            "SELECT sequence_id, state FROM finding_records WHERE canonical_id = ? ORDER BY sequence_id ASC",
+            (finding_a.canonical_id,),
+        )
+        rows_a = cur_a.fetchall()
+        self.assertEqual(2, len(rows_a))  # seq 1 (HELD), seq 2 (APPROVED)
+        self.assertEqual("held", rows_a[0]["state"])
+        self.assertEqual("approved", rows_a[1]["state"])
+
+        cur_b = self.tiger_conn.execute(
+            "SELECT sequence_id, state FROM finding_records WHERE canonical_id = ? ORDER BY sequence_id ASC",
+            (finding_b.canonical_id,),
+        )
+        rows_b = cur_b.fetchall()
+        self.assertEqual(2, len(rows_b))  # seq 1 (HELD), seq 2 (APPROVED)
+        self.assertEqual("held", rows_b[0]["state"])
+        self.assertEqual("approved", rows_b[1]["state"])
+
+        # Audit history is append-only, chronologically ordered, and fully reconstructable
         trace = self.tiger_audit.reconstruct_run("del-scen-7")
-        self.assertEqual(2, len(trace.timeline))
-        self.assertEqual("specialist_completed", trace.timeline[0].event_name)
-        self.assertEqual("worker_retry_started", trace.timeline[1].event_name)
+        self.assertEqual(3, len(trace.timeline))
+        self.assertEqual("attempt_started", trace.timeline[0].event_name)
+        self.assertEqual("finding_persisted", trace.timeline[1].event_name)
+        self.assertEqual("worker_retry_started", trace.timeline[2].event_name)
 
     # ------------------------------------------------------------------------
     # Scenario 8: Retry after Redis state persistence before worker completion
@@ -1178,53 +1346,108 @@ class TestCrossSystemFailureInteractions(unittest.IsolatedAsyncioTestCase):
     # Scenario 9: Infrastructure failure during publication reconciliation
     # ------------------------------------------------------------------------
     def test_scenario_9_infrastructure_failure_during_publication_reconciliation(self) -> None:
-        """Publisher pre-commits PENDING; network fails during GitHub call leaving state AMBIGUOUS.
-        On subsequent retry, reconciliation queries GitHub and fails closed if unverified.
+        """Covers both branches of publication ambiguity:
+        Case A: Server-side effect succeeded on GitHub, but network dropped before client read 201 OK -> reconciles to ALREADY_PUBLISHED without duplicate.
+        Case B: Network dropped before GitHub accepted review -> unverified ambiguity fails closed on retry.
         """
         now = 1000.0
         sqlite_conn = sqlite3.connect(":memory:")
         truth_store = ReviewTruthStore(sqlite_conn)
         publisher = GitHubReviewPublisher(sqlite_conn, truth_store, self.github_client)
 
-        finding = _make_sample_finding(
+        finding = _make_canonical(
             canonical_id="can-scen-9",
             repository_id="octocat/hello-world",
             head_sha="head-sha-valid",
+            file_path="src/auth.py",
+            line_range=(10, 15),
         )
         truth_store.record_initial(finding, initial_state=TruthState.APPROVED)
 
-        # Simulate network error during GitHub call
-        self.github_client.fail_create_review = True
-        res1 = publisher.publish_finding(finding, pull_number=101, now=now)
+        # --------------------------------------------------------------------
+        # Case A: GitHub accepted and created review, but TCP severed before 201 response
+        # --------------------------------------------------------------------
+        self.github_client.simulate_ambiguous_creation = True
+        res_a1 = publisher.publish_finding(
+            finding,
+            pull_number=101,
+            diff_content=AUTH_DIFF,
+            now=now,
+        )
 
-        # Marks AMBIGUOUS and fails closed
-        self.assertEqual(PublicationStatus.FAILED, res1.status)
+        # Review was created on GitHub server
+        self.assertEqual(1, len(self.github_client.reviews))
+        # But caller received FAILED due to dropped response
+        self.assertEqual(PublicationStatus.FAILED, res_a1.status)
+
+        # Effect table recorded AMBIGUOUS
         idemp_key = publisher.compute_idempotency_key(
             finding.repository_id,
             101,
             finding.head_sha,
             finding.canonical_id,
         )
-        effect = publisher._get_existing_effect(idemp_key)
-        self.assertIsNotNone(effect)
-        self.assertEqual(PublicationStatus.AMBIGUOUS.value, effect["status"])
+        effect_a = publisher._get_existing_effect(idemp_key)
+        self.assertIsNotNone(effect_a)
+        self.assertEqual(PublicationStatus.AMBIGUOUS.value, effect_a["status"])
 
-        # Attempt retry while GitHub is still failing -> fails closed
+        # On retry: publisher reconciles with GitHub, detects existing review, and returns ALREADY_PUBLISHED
+        self.github_client.simulate_ambiguous_creation = False
+        res_a2 = publisher.publish_finding(
+            finding,
+            pull_number=101,
+            diff_content=AUTH_DIFF,
+            now=now + 5.0,
+        )
+        self.assertEqual(PublicationStatus.ALREADY_PUBLISHED, res_a2.status)
+        # ZERO duplicate reviews (count remains strictly 1)
+        self.assertEqual(1, len(self.github_client.reviews))
+        self.assertEqual(1, self.github_client.create_review_calls)
+
+        # --------------------------------------------------------------------
+        # Case B: Network failure before GitHub receives request (unverified effect fails closed)
+        # --------------------------------------------------------------------
+        finding_b = _make_canonical(
+            canonical_id="can-scen-9b",
+            repository_id="octocat/hello-world",
+            head_sha="head-sha-valid",
+            file_path="src/auth.py",
+            line_range=(10, 15),
+        )
+        truth_store.record_initial(finding_b, initial_state=TruthState.APPROVED)
+
+        # Simulate network drop before review creation
+        self.github_client.fail_create_review = True
+        res_b1 = publisher.publish_finding(
+            finding_b,
+            pull_number=101,
+            diff_content=AUTH_DIFF,
+            now=now + 10.0,
+        )
+        self.assertEqual(PublicationStatus.FAILED, res_b1.status)
+
+        idemp_key_b = publisher.compute_idempotency_key(
+            finding_b.repository_id,
+            101,
+            finding_b.head_sha,
+            finding_b.canonical_id,
+        )
+        effect_b = publisher._get_existing_effect(idemp_key_b)
+        self.assertIsNotNone(effect_b)
+        self.assertEqual(PublicationStatus.AMBIGUOUS.value, effect_b["status"])
+
+        # On retry: reconciliation queries GitHub, finds no verified review, and fails closed
         self.github_client.fail_create_review = False
-        self.github_client.should_fail_api = True
-        res2 = publisher.publish_finding(finding, pull_number=101, now=now + 5.0)
-        self.assertEqual(PublicationStatus.FAILED, res2.status)
-        self.assertIn("Failed to reconcile", res2.reason)
-        self.assertEqual(0, len(self.github_client.reviews))
-        self.assertEqual(0, len(self.github_client.comments))
-
-        # Attempt retry when GitHub is healthy: finds no verified effect and fails closed
-        self.github_client.should_fail_api = False
-        res3 = publisher.publish_finding(finding, pull_number=101, now=now + 10.0)
-        self.assertEqual(PublicationStatus.FAILED, res3.status)
-        self.assertIn("failing closed", res3.reason)
-        self.assertEqual(0, len(self.github_client.reviews))
-        self.assertEqual(0, len(self.github_client.comments))
+        res_b2 = publisher.publish_finding(
+            finding_b,
+            pull_number=101,
+            diff_content=AUTH_DIFF,
+            now=now + 15.0,
+        )
+        self.assertEqual(PublicationStatus.FAILED, res_b2.status)
+        self.assertIn("failing closed", res_b2.reason)
+        # Review count did NOT increase (remains strictly 1 from Case A)
+        self.assertEqual(1, len(self.github_client.reviews))
 
     # ------------------------------------------------------------------------
     # Scenario 10: PR head SHA changes during recovery

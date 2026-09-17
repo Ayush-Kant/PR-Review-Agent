@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "0dc6f626bcf44b708ce7e2bc6599f5722c4013d6",
-  "sourceHash": "078cdd01b13b55c469b2d510efd4cf2771b0fa761d98eb51867cde04f1820e28",
+  "revision": "af84efd16dad5a69c1526427be5ea2c61f49bb90",
+  "sourceHash": "67b4a8c5f452737698f1487e5690f5bbc26c936d1a48e354e93aa1efe455bbbd",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -387,7 +387,7 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "e98c5ec3907669906e82886fbf00d218370bc2112fd2b70cc0787b2acb196978"
+      "contentHash": "e6cbc393c4f63755295c9e2aab58a92ad7ccfd2340f4688074adc77ca8927fbc"
     },
     {
       "id": "file:tests/test_queue_and_checkpoint_contracts.py",
