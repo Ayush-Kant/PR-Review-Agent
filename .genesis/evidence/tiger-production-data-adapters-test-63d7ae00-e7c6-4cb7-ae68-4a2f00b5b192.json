@@ -1,0 +1,30 @@
+{
+  "task": "tiger-production-data-adapters",
+  "gate": "test",
+  "kind": "command",
+  "attempt": "63d7ae00-e7c6-4cb7-ae68-4a2f00b5b192",
+  "command": "python -m pytest tests/test_tiger_data_adapters.py",
+  "started_at": "2026-09-17T11:59:51.469Z",
+  "observed_at": "2026-09-17T12:00:05.337Z",
+  "exit_code": 4,
+  "signal": null,
+  "stdout": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0\r\nrootdir: C:\\Users\\wwway\\OneDrive\\Desktop\\PR-Review-Agent\r\nplugins: anyio-4.12.1, langsmith-0.12.4\r\ncollected 0 items\r\n\r\n============================ no tests ran in 0.01s ============================\r\n",
+  "stderr": "ERROR: file or directory not found: tests/test_tiger_data_adapters.py\r\n\r\n",
+  "failure": "command-failed",
+  "receipt": null,
+  "revision": {
+    "commit": "56f79c43325dc04caa629a1457f88b530aceefa6",
+    "dirty": true
+  },
+  "source_hash": "6dd0d8dc49a1ebd967ff3fa4103b967016e1ecdf97a119be40fc8aa9d37a2d37",
+  "before_hash": "6dd0d8dc49a1ebd967ff3fa4103b967016e1ecdf97a119be40fc8aa9d37a2d37",
+  "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "win32",
+    "arch": "x64",
+    "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+    "variables": {}
+  },
+  "hash": "8b487751a5a758bae6cf59834c7e91febb89c185355e9fb184fb4b52515f081e"
+}

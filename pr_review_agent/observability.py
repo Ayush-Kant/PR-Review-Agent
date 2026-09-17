@@ -94,6 +94,8 @@ class RunProvenanceTrace:
     specialist_steps: list[dict[str, Any]] = field(default_factory=list)
     contains_secrets: bool = False
     coverage_summary: dict[str, Any] | None = None
+    completeness: str = "complete"
+    completeness_reasons: tuple[str, ...] = ()
 
 
 class AuditSpine:

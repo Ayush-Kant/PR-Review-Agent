@@ -422,10 +422,9 @@ class TestTigerSchemaAndConnection(unittest.TestCase):
         harness = DeterministicPostgresHarness(vector_installed=True)
         runner = MigrationRunner(harness)
 
-        # Pass 1: Applies initial migration
+        # Pass 1: Applies migrations 001 and 002
         applied_1 = runner.apply_all()
-        self.assertEqual(1, len(applied_1))
-        self.assertEqual(1, applied_1[0].version)
+        self.assertEqual([1, 2], [m.version for m in applied_1])
 
         # Pass 2: Detects already-applied migration with matching checksum; applies 0
         applied_2 = runner.apply_all()
@@ -434,7 +433,9 @@ class TestTigerSchemaAndConnection(unittest.TestCase):
         # Check recorded migrations
         recorded = runner.get_applied_migrations()
         self.assertIn(1, recorded)
+        self.assertIn(2, recorded)
         self.assertEqual(applied_1[0].checksum, recorded[1])
+        self.assertEqual(applied_1[1].checksum, recorded[2])
 
     # -------------------------------------------------------------------------
     # 8. Extension capability detection (pgvector, TimescaleDB, pgvectorscale)
@@ -451,7 +452,7 @@ class TestTigerSchemaAndConnection(unittest.TestCase):
         self.assertIn("vector", report_a.available_extensions)
         runner_a = MigrationRunner(harness_installed)
         applied = runner_a.apply_all()
-        self.assertEqual(1, len(applied))
+        self.assertEqual([1, 2], [m.version for m in applied])
 
         # Case B: Vector available in cluster but NOT installed in pg_extension
         # Must report has_vector=False, vector_available=True, and fail closed before vector DDL!

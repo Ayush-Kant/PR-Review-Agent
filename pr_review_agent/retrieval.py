@@ -9,8 +9,37 @@ import math
 import re
 import sqlite3
 import time
+from typing import Protocol, runtime_checkable
 
 from pr_review_agent.orchestration import CandidateFinding
+
+
+@runtime_checkable
+class CodeMemoryStoreProtocol(Protocol):
+    """Minimal protocol defining the code memory store persistence boundary."""
+
+    def index_repository(
+        self,
+        repository_id: str,
+        revision: str,
+        chunks: Sequence[CodeChunk] | Mapping[str, str],
+        *args: Any,
+        **kwargs: Any,
+    ) -> int:
+        """Index a snapshot of chunks or files for a revision, returning total chunks indexed."""
+        ...
+
+    def is_fresh(self, repository_id: str, revision: str) -> bool:
+        """Return True if the repository revision is known and currently fresh."""
+        ...
+
+    def get_chunks(
+        self,
+        repository_id: str,
+        revision: str,
+    ) -> list[CodeChunk]:
+        """Fetch chunks scoped strictly by repository and revision."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -269,7 +298,7 @@ class HybridRetriever:
 
     def __init__(
         self,
-        memory_store: CodeMemoryStore,
+        memory_store: CodeMemoryStoreProtocol,
         *,
         vector_dim: int = 128,
         lexical_weight: float = 0.5,
@@ -294,7 +323,15 @@ class HybridRetriever:
         if max_tokens <= 0 or max_k <= 0:
             return ()
 
-        chunks = self.memory_store.get_chunks(repository_id, revision, file_path=file_path_filter)
+        if file_path_filter and hasattr(self.memory_store, "_get_chunks_for_file"):
+            chunks = self.memory_store._get_chunks_for_file(repository_id, revision, file_path=file_path_filter)
+        elif file_path_filter:
+            try:
+                chunks = self.memory_store.get_chunks(repository_id, revision, file_path=file_path_filter)  # type: ignore
+            except TypeError:
+                chunks = [c for c in self.memory_store.get_chunks(repository_id, revision) if c.file_path == file_path_filter]
+        else:
+            chunks = self.memory_store.get_chunks(repository_id, revision)
         if not chunks or not query.strip():
             return ()
 
@@ -395,7 +432,7 @@ class HybridRetriever:
 class FindingEvidenceValidator:
     """Enforces strict evidence requirements on candidate findings; suppresses ungrounded findings."""
 
-    def __init__(self, memory_store: CodeMemoryStore) -> None:
+    def __init__(self, memory_store: CodeMemoryStoreProtocol) -> None:
         self.memory_store = memory_store
 
     def validate_finding(
@@ -510,7 +547,13 @@ class FindingEvidenceValidator:
                 return False
 
             file_path = file_and_lines.split("#")[0].strip()
-            chunks = self.memory_store.get_chunks(repository_id, cited_revision, file_path=file_path)
+            if hasattr(self.memory_store, "_get_chunks_for_file"):
+                chunks = self.memory_store._get_chunks_for_file(repository_id, cited_revision, file_path=file_path)
+            else:
+                try:
+                    chunks = self.memory_store.get_chunks(repository_id, cited_revision, file_path=file_path)  # type: ignore
+                except TypeError:
+                    chunks = [c for c in self.memory_store.get_chunks(repository_id, cited_revision) if c.file_path == file_path]
             if not chunks:
                 return False
 
@@ -539,7 +582,13 @@ class FindingEvidenceValidator:
                 if not self.memory_store.is_fresh(cite_repo, cite_rev):
                     return False
 
-                chunks = self.memory_store.get_chunks(cite_repo, cite_rev, file_path=cite_file)
+                if hasattr(self.memory_store, "_get_chunks_for_file"):
+                    chunks = self.memory_store._get_chunks_for_file(cite_repo, cite_rev, file_path=cite_file)
+                else:
+                    try:
+                        chunks = self.memory_store.get_chunks(cite_repo, cite_rev, file_path=cite_file)  # type: ignore
+                    except TypeError:
+                        chunks = [c for c in self.memory_store.get_chunks(cite_repo, cite_rev) if c.file_path == cite_file]
                 if not chunks:
                     return False
 

@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-17T10:57:14.360Z"
+    "updated_at": "2026-09-17T17:37:47.094Z"
   },
   "policy": {
     "ponytail": "full",
@@ -23,11 +23,11 @@
     }
   },
   "lifecycle": {
-    "phase": "verify",
-    "status": "ready",
-    "active_task": null,
+    "phase": "build",
+    "status": "active",
+    "active_task": "tiger-production-data-adapters",
     "blocker": null,
-    "next_action": "Review completed work and choose the next bounded outcome."
+    "next_action": "Run the task pre-flight."
   },
   "commands": {},
   "workflow": {
@@ -87,14 +87,14 @@
       ]
     },
     "plan_check": {
-      "at": "2026-09-17T10:28:56.283Z",
-      "source_hash": "e1672487367ca57099ddc12ff9d407ee8542e965a58256bca493eee34a7e2931"
+      "at": "2026-09-17T11:15:14.911Z",
+      "source_hash": "0333315c749cb2c10cbfe54ea611dabe0f87a9591323627714f9ea2e9f8a7287"
     },
     "plan_approval": {
       "human": "Ayush Kant",
-      "reason": "Approve plan reflecting W1-05 integrity corrections",
-      "at": "2026-09-17T10:29:15.146Z",
-      "source_hash": "e1672487367ca57099ddc12ff9d407ee8542e965a58256bca493eee34a7e2931"
+      "reason": "Approve plan containing W1-06 task: tiger-production-data-adapters",
+      "at": "2026-09-17T11:15:36.961Z",
+      "source_hash": "0333315c749cb2c10cbfe54ea611dabe0f87a9591323627714f9ea2e9f8a7287"
     }
   },
   "artifacts": [
@@ -297,6 +297,26 @@
       "status": "accepted",
       "source": "User decision, 2026-09-17",
       "recorded_at": "2026-09-17T10:19:40.983Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-51cf1bfa",
+      "title": "W1-06 Scope, Non-Goals, and Adapter Boundary Invariants",
+      "text": "Scope bounded to pr_review_agent/adapters/tiger_stores.py, pr_review_agent/adapters/__init__.py, tests/test_tiger_data_adapters.py, and optional migration pr_review_agent/migrations/002_repository_revisions.sql. Non-goals: no runtime cutover, no SQLite removal, no retrieval rewrite, no embedding model/dimension selection, no vector index creation, no Redis changes, no checkpoint changes, no LangGraph changes, no GitHub publication changes, no W1-07/W1-08 work.",
+      "status": "accepted",
+      "source": null,
+      "recorded_at": "2026-09-17T12:04:52.086Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-ca60fdb3",
+      "title": "W1-06 Scope Expansion: tests/test_tiger_schema_and_connection.py",
+      "text": "Expand W1-06 task tiger-production-data-adapters scope to include tests/test_tiger_schema_and_connection.py because the approved W1-06 migration 002 changes the expected applied migration set from {1} to {1,2}.",
+      "status": "accepted",
+      "source": null,
+      "recorded_at": "2026-09-17T13:24:40.364Z",
       "paths": [],
       "tags": []
     }
@@ -2060,6 +2080,111 @@
         "python -m pytest"
       ],
       "rollback_safety": "Changes are strictly isolated to Tiger Cloud adapter/migration files and their dedicated test suite. SQLite default runtime remains untouched and authoritative. If any gate fails, revert git changes cleanly without affecting existing V1 engine, queue, or checkpoint behavior."
+    },
+    {
+      "id": "tiger-production-data-adapters",
+      "outcome": "Implement Tiger Cloud production data adapters behind existing V1 contracts: TigerCodeMemoryStore, TigerReviewTruthStore, and TigerAuditSpine (W1-06)",
+      "state": "active",
+      "risk": "medium",
+      "owner": null,
+      "scope": [],
+      "dependencies": [],
+      "requirements": [
+        "FR-15"
+      ],
+      "inputs": [],
+      "environment": [],
+      "scenarios": [],
+      "gates": [
+        {
+          "id": "test",
+          "kind": "command",
+          "command": "python -m pytest tests/test_tiger_data_adapters.py",
+          "mandatory": true,
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/tiger-production-data-adapters-test-c77735f6-93e2-47a5-8c64-a1b6d60d228f.json",
+            "hash": "ef6b3c4781af1c54993e9cacab4977d488220472a90da41da8a078cd69f76728",
+            "source_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240",
+            "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+            "observed_at": "2026-09-17T17:37:46.778Z"
+          }
+        },
+        {
+          "id": "independent-review",
+          "kind": "review",
+          "command": "",
+          "mandatory": true,
+          "status": "pending",
+          "evidence": null
+        }
+      ],
+      "next_action": "Run the task pre-flight.",
+      "blocker": null,
+      "notes": [
+        "Scope: pr_review_agent/adapters/tiger_stores.py, pr_review_agent/adapters/__init__.py, tests/test_tiger_data_adapters.py, pr_review_agent/migrations/002_repository_revisions.sql",
+        "Non-goals: No runtime cutover, no SQLite removal, no retrieval rewrite, no embedding model/dimension selection, no vector index creation, no Redis changes, no checkpoint changes, no LangGraph changes, no GitHub publication changes, no W1-07/W1-08 work",
+        "Reconciled Scope: pr_review_agent/adapters/tiger_stores.py, pr_review_agent/adapters/__init__.py, tests/test_tiger_data_adapters.py, pr_review_agent/migrations/002_repository_revisions.sql, pr_review_agent/retrieval.py, pr_review_agent/observability.py",
+        "Reconciled Non-goals: No runtime cutover, no SQLite removal, no retrieval rewrite, no embedding model/dimension selection, no vector index creation, no Redis changes, no checkpoint changes, no LangGraph changes, no GitHub publication changes, no W1-07/W1-08 work"
+      ],
+      "failures": [],
+      "limitations": [],
+      "created_at": "2026-09-17T11:14:53.076Z",
+      "updated_at": "2026-09-17T12:27:12.563Z",
+      "base_manifest": {
+        ".gitignore": "dc961659055b943bf2425da012d0fece8f2543d58d0e5936573a91e1c0455f15",
+        "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
+        "PRODUCTION-20-PHASE-GEMINI-OPERATING-CONTRACT.md": "3e9c48ef58de52a7a61cba5fa451d265078c5160c03065385f5d5e6c747879b7",
+        "SPEC.md": "b8d6c7711ad36963866f054bdce78b173952534580a14338119c8bb78bd14caa",
+        "artifacts/live_golden_report.json": "4b5a1e08235b5c2e72bf63b3c7aed6c18c6814b01423c726862a7c65f2466136",
+        "artifacts/live_golden_report.md": "21f4b013f39e1ef8030d4221839de5d9d4e25e6533d34aedd0de7b2f57b9fe6e",
+        "data/golden_prs_v1.json": "f33b15ffb7155f217f3201ee91e701657ccf810b2d22763c23060574286097a6",
+        "pr_review_agent/__init__.py": "54a5a834a2021184b7a3316531725ca766f860f2e1ffa2d9e129a4b6131b6717",
+        "pr_review_agent/adapters/__init__.py": "a7eb90b1d43c8826790ecb1e6347a263f5c92059a795cf8523ca5a1da2c3e40d",
+        "pr_review_agent/adapters/github.py": "1f6b8ac760c3713dda0f885cc5fe5936baa4fb43a3c4c7da3d21f6f60b9a0789",
+        "pr_review_agent/adapters/llm.py": "aedf3aa9f2860b832d860f6365ac45203cae99181c4cd6a6a51045a51cb686ca",
+        "pr_review_agent/adapters/redis_checkpoint.py": "e7e008b737f92da73b77a7dd9dda45dc6942c9fa7e221430f03a55e4c3a40687",
+        "pr_review_agent/adapters/redis_queue.py": "ee4514a4b6688aed4ef69a024ea5aabf8ae01b119af64ad66bdf5f0d6898a09c",
+        "pr_review_agent/adapters/tiger_connection.py": "71c3c6ec08bf21af4319c522243962b50e2ea7a21edc285a9d33d581c3d9c2e2",
+        "pr_review_agent/adapters/tiger_migrations.py": "f8e74182b1b274f521b4c18804b9b38836a91322218aadc9ea8dc1c1cfa9118a",
+        "pr_review_agent/adapters/webhook_ingress.py": "3a25c19c5063290b8bb65c94a340d8b5401281c7588b469209d4e34c4897a653",
+        "pr_review_agent/cost_controls.py": "b55e03c0e86b9add48d9d7b28e3d8bca3f034ca7bec177cf2dd0245150f60d2e",
+        "pr_review_agent/evaluation.py": "62131d2fbd3118983032f735e5e3fa0c2c5475ebdca197f7c98a46590b0d1774",
+        "pr_review_agent/github_output.py": "ef66bd4121b68bb1d44e6ab3ea110746404dd05fb936d00fca957491fc370e60",
+        "pr_review_agent/intake.py": "48cf894c8e609bc67cff78f0aef1e61bf7615b9c7b5178baad4a0d4c9aac2251",
+        "pr_review_agent/migrations/001_initial_tiger_schema.sql": "420ee6022f7e345a946487d363e53111b532c354624f16ced06a36bb2ef972c3",
+        "pr_review_agent/observability.py": "4b390b10e46c076af045814953c9a4f57ebd86149addd8f8fcf63dfda50b57eb",
+        "pr_review_agent/orchestration.py": "d4f0a8a9c56f37648a07de331cb516bc7ff43108798f9906ff63bc05c104481c",
+        "pr_review_agent/policy.py": "700b96655fbf936c608b724bc2cad99d944a2154025382253a651ea45ed20c28",
+        "pr_review_agent/retrieval.py": "62716328afe0119eff3fb75dcb6d5a30ff491cf71262a70cf0323161f5857b0c",
+        "pr_review_agent/security.py": "273fc57ed51b7e7110669c9416211ed1f174c33d959d38053c9196972da05021",
+        "pr_review_agent/server.py": "f892d6793e5140524856c912c34cc1da86d8c1f2d83bbb21581addc4448f5061",
+        "pr_review_agent/service_config.py": "7add1a3ad55ff35c8fe460c080c712322a05446e5d278457b287eb275252723f",
+        "pr_review_agent/worker.py": "3f4d273af81dd66bf68d2e90baf08261fc538fa7a731509c4ebdd5a07b9c0be7",
+        "scratch/analyze_genesis.py": "1e47c7a8ec107c1c2f1b7709dedc7cbf14c34f9d274389d0d275b895b3f48746",
+        "scratch/dump_forensic_report.py": "43e928b908cfcb4e0eb9bf912d548c0b0f86da041907ad467862ea8a9f27b4e1",
+        "scratch/query_case5.py": "88e858518b0ea8e5857b4bd41282402cbabba2c8e603c762f859b8915a6d8cfc",
+        "scripts/evaluate_golden.py": "8dda142eff26f34e4df98b0648d43ba9919bae65b37027a0715ff15d91112f61",
+        "scripts/evaluate_golden_live.py": "5664f2b4552f83db3ec29ad15dee1f3a69894cf2d4c4984b2e8cff7e061f2b95",
+        "scripts/live_pr_review.py": "045a9308c59507645cbcc093959ec21b3b6f92c9dc9062fbadcf9d231710942b",
+        "tests/test_audit_observability_dashboard.py": "6b2982f18570ad0ee42cc475a2639ae914d4df80cf7f6bbb76fb74775a75bfdc",
+        "tests/test_cost_and_budget_controls.py": "07813b8f14603149306d1366517d2dde124be70552f96f26b914a0b45cdc639e",
+        "tests/test_end_to_end_replay.py": "7894afcf7427c7d408e747f72520ddd01f19060b6494ae158da19790b3129dd8",
+        "tests/test_evaluation_learning_drift.py": "3406db6541bd758c0679083078635f71a3d09c3d2e0454c081e86e216233c5ca",
+        "tests/test_finding_policy_and_hitl.py": "26c1c45b059831cd2b4f89ffc1ea34b9a72b5da9813dba8b1565b94331b10a39",
+        "tests/test_github_review_output.py": "40e2ae39b0edec6da8cbe268b27a626ad8d60336f1d110d547f0bfb948f37b7a",
+        "tests/test_live_golden_evaluation.py": "b4568130368fbe995fe2414de3e1dc5f66c122da45a84c07c3fadedecae1ddd3",
+        "tests/test_live_pr_validation.py": "52e80d253f8bded9272237e81bf488832b786efc6323b7e42fdcce91c7f01258",
+        "tests/test_network_adapters.py": "527bfa5bda19446296d36d5d4b9d75583d561af320329446174f3f07b94ecb38",
+        "tests/test_queue_and_checkpoint_contracts.py": "fcfd90e61fd6e6aca933ac1963060e30b3474b69ad571f6e48f5688a32e61af2",
+        "tests/test_redis_checkpoint_adapter.py": "5b10e9bab8b2d4d4eeecddb132405d4e60fa5056db1d6ca5cc6850f7da45a213",
+        "tests/test_redis_queue_adapter.py": "6717e6a31a0a509b627436b570139c840c3c45f88b401d54becd0e82d64b4348",
+        "tests/test_retrieval_and_findings.py": "fd8b8592d703e74e321743bad9851830b23495fc13dfe9e066992f044461e06b",
+        "tests/test_review_orchestration.py": "59933f071fa5b24014c4b7731e4096f2841e288923674e6e9fb1dacdb40c76ac",
+        "tests/test_security_boundaries.py": "84d45938099554f272b92106ef286cd64ba6ebf13675daeef464b37c149fb7a9",
+        "tests/test_tiger_schema_and_connection.py": "409dd3fb14e83334abbd061c1fcce527d2dacd8adcf9f86b5b84878df8dcf924",
+        "tests/test_webhook_intake.py": "f1e17e307e4d13f631386bbac16df9757452a3b44805ce8757a29594afb30fc7"
+      }
     }
   ],
   "learning_proposals": [],
@@ -3431,6 +3556,126 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-17T10:52:51.517Z"
+    },
+    {
+      "id": "63d7ae00-e7c6-4cb7-ae68-4a2f00b5b192",
+      "task": "tiger-production-data-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_tiger_data_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 8516,
+      "child_pid": 2268,
+      "started_at": "2026-09-17T11:59:51.469Z",
+      "status": "failed",
+      "before_hash": "6dd0d8dc49a1ebd967ff3fa4103b967016e1ecdf97a119be40fc8aa9d37a2d37",
+      "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": "command-failed",
+      "ended_at": "2026-09-17T12:00:05.337Z"
+    },
+    {
+      "id": "1dcca55c-b70b-4e79-b171-b7104953743f",
+      "task": "tiger-production-data-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_tiger_data_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 8248,
+      "child_pid": 18036,
+      "started_at": "2026-09-17T13:05:36.549Z",
+      "status": "failed",
+      "before_hash": "f4770709c1a7ae969dc615175a1e105102fb43c8e7e89f83950835917c7928ea",
+      "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": "command-failed",
+      "ended_at": "2026-09-17T13:05:49.165Z"
+    },
+    {
+      "id": "76b0b31c-a116-4775-b76f-c12191389441",
+      "task": "tiger-production-data-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_tiger_data_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 3228,
+      "child_pid": 14176,
+      "started_at": "2026-09-17T13:07:03.969Z",
+      "status": "passed",
+      "before_hash": "3b5f4a6dcd5fe4e25f016e753eedc0243dd5bec77b21c466cb898ad6f71a08e0",
+      "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-17T13:07:16.201Z"
+    },
+    {
+      "id": "c63da685-14e0-4fa2-bfd5-43b1bcb1a3aa",
+      "task": "tiger-production-data-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_tiger_data_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 17936,
+      "child_pid": 22156,
+      "started_at": "2026-09-17T16:37:16.065Z",
+      "status": "passed",
+      "before_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240",
+      "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-17T16:37:34.004Z"
+    },
+    {
+      "id": "c77735f6-93e2-47a5-8c64-a1b6d60d228f",
+      "task": "tiger-production-data-adapters",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_tiger_data_adapters.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 13348,
+      "child_pid": 22360,
+      "started_at": "2026-09-17T17:37:08.274Z",
+      "status": "passed",
+      "before_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240",
+      "config_hash": "e438cc8e3f01ddcc97445e2dd71a14b8e019d7adc199cf900d36c6a272629f24",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "358371454f03eb4fdfd3eda3cb1d18cb1dd8fe9445404bb3d3047267b3977eb9",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-17T17:37:46.778Z"
     }
   ],
   "authorizations": [],
@@ -3438,14 +3683,14 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-17T10:57:13.940Z",
+    "at": "2026-09-17T16:37:48.799Z",
     "revision": {
-      "commit": "f34120d80247382cdd1388bd5a46e54beaa3dce6",
+      "commit": "56f79c43325dc04caa629a1457f88b530aceefa6",
       "dirty": true,
-      "source_hash": "6dd0d8dc49a1ebd967ff3fa4103b967016e1ecdf97a119be40fc8aa9d37a2d37"
+      "source_hash": "18b3a16783ae1de4052047f5e3410460529dea297dfd236ecb4ef51622b3a240"
     },
-    "active_task": null,
-    "next_action": "Review completed work and choose the next bounded outcome."
+    "active_task": "tiger-production-data-adapters",
+    "next_action": "Run the task pre-flight."
   },
   "legacy": null
 }
