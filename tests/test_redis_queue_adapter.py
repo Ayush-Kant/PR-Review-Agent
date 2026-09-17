@@ -244,6 +244,25 @@ class InMemoryRedisClient:
         self._ensure_open()
         return len(self._zsets.get(str(name), {}))
 
+    def delete(self, *names: Any) -> int:
+        self._ensure_open()
+        count = 0
+        for name in names:
+            s_name = str(name)
+            if s_name in self._strings:
+                del self._strings[s_name]
+                count += 1
+            if s_name in self._hashes:
+                del self._hashes[s_name]
+                count += 1
+            if s_name in self._zsets:
+                del self._zsets[s_name]
+                count += 1
+            if s_name in self._sets:
+                del self._sets[s_name]
+                count += 1
+        return count
+
     def sadd(self, name: str, *values: Any) -> int:
         self._ensure_open()
         s_name = str(name)

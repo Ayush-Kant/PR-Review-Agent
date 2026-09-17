@@ -73,19 +73,16 @@ class WebhookIngressHandler:
                 status_code=200,
             )
 
-        if result.status == "duplicate":
-            existing_job = None
-            if self.job_queue is not None and result.delivery_id:
-                if hasattr(self.job_queue, "get_job_by_delivery"):
-                    existing_job = self.job_queue.get_job_by_delivery(result.delivery_id)
-                elif hasattr(self.job_queue, "get_job"):
-                    existing_job = self.job_queue.get_job(f"job-{result.delivery_id}")
-            resp: dict[str, Any] = {"status": "duplicate", "delivery_id": result.delivery_id}
-            if existing_job is not None:
-                resp["job_id"] = existing_job.job_id
-            return JSONResponse(resp, status_code=200)
+        if result.status == "conflict":
+            return JSONResponse(
+                {
+                    "status": "rejected",
+                    "error": "Delivery payload conflicts with existing immutable delivery provenance",
+                    "delivery_id": result.delivery_id,
+                },
+                status_code=409,
+            )
 
-        # status == "accepted"
         if self.job_queue is None or result.snapshot is None:
             # Deterministic safe failure: an accepted delivery cannot be scheduled without a durable queue
             return JSONResponse(
@@ -97,6 +94,51 @@ class WebhookIngressHandler:
                 status_code=503,
             )
 
+        # Inspect durable queue state first (Queue is the distributed authority for delivery deduplication)
+        existing_job = None
+        if result.delivery_id:
+            try:
+                if hasattr(self.job_queue, "get_job_by_delivery"):
+                    existing_job = self.job_queue.get_job_by_delivery(result.delivery_id)
+                elif hasattr(self.job_queue, "get_job"):
+                    existing_job = self.job_queue.get_job(f"job-{result.delivery_id}")
+            except Exception as exc:
+                if hasattr(self.webhook_intake, "mark_enqueue_failed") and result.delivery_id:
+                    self.webhook_intake.mark_enqueue_failed(result.delivery_id, str(exc))
+                return JSONResponse(
+                    {
+                        "status": "failed",
+                        "error": f"Failed to enqueue review job: {exc}",
+                        "delivery_id": result.delivery_id,
+                    },
+                    status_code=503,
+                )
+
+        if existing_job is not None:
+            if hasattr(self.webhook_intake, "mark_enqueued") and result.delivery_id:
+                self.webhook_intake.mark_enqueued(result.delivery_id, existing_job.job_id)
+
+            if result.status == "duplicate":
+                return JSONResponse(
+                    {
+                        "status": "duplicate",
+                        "delivery_id": result.delivery_id,
+                        "job_id": existing_job.job_id,
+                    },
+                    status_code=200,
+                )
+            else:
+                return JSONResponse(
+                    {
+                        "status": "accepted",
+                        "delivery_id": result.delivery_id,
+                        "job_id": existing_job.job_id,
+                    },
+                    status_code=202,
+                )
+
+        # Durable queue job does not exist yet (concurrent race, previous failure, or pending delivery).
+        # Safely attempt deterministic enqueue of the immutable review snapshot into the queue.
         try:
             if isinstance(self.job_queue, RedisJobQueue):
                 job = await asyncio.to_thread(

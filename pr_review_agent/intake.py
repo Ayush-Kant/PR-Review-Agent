@@ -88,17 +88,50 @@ class WebhookIntake:
         snapshot_json = json.dumps(asdict(snapshot), sort_keys=True, separators=(",", ":"))
         with self.connection:
             row = self.connection.execute(
-                "SELECT state FROM deliveries WHERE delivery_id = ?",
+                "SELECT d.state, s.snapshot_json FROM deliveries d "
+                "LEFT JOIN review_snapshots s ON d.delivery_id = s.delivery_id "
+                "WHERE d.delivery_id = ?",
                 (delivery_id,),
             ).fetchone()
-            if row is not None and row[0] in ("accepted", "enqueued"):
+            if row is not None:
+                existing_state, existing_snapshot_json = row[0], row[1]
+                if existing_snapshot_json:
+                    existing_data = json.loads(existing_snapshot_json)
+                    # Material conflict detection: head SHA, PR number, or repository identity mismatch
+                    if (
+                        existing_data.get("repository_id") != snapshot.repository_id
+                        or existing_data.get("pull_request_number") != snapshot.pull_request_number
+                        or existing_data.get("head_sha") != snapshot.head_sha
+                        or existing_data.get("base_sha") != snapshot.base_sha
+                    ):
+                        return IntakeResult("conflict", delivery_id, None)
+
+                    reconstructed_snapshot = ReviewSnapshot(
+                        repository_id=existing_data["repository_id"],
+                        repository_full_name=existing_data["repository_full_name"],
+                        pull_request_number=existing_data["pull_request_number"],
+                        base_sha=existing_data["base_sha"],
+                        head_sha=existing_data["head_sha"],
+                        changed_files=tuple(existing_data.get("changed_files", ())),
+                        policy_version=existing_data["policy_version"],
+                        prompt_version=existing_data["prompt_version"],
+                        retrieval_index_version=existing_data["retrieval_index_version"],
+                        model_configuration=dict(existing_data.get("model_configuration", {})),
+                    )
+                    return IntakeResult("duplicate", delivery_id, reconstructed_snapshot)
+
+                self.connection.execute(
+                    "INSERT OR IGNORE INTO review_snapshots(delivery_id, snapshot_json) VALUES (?, ?)",
+                    (delivery_id, snapshot_json),
+                )
                 return IntakeResult("duplicate", delivery_id, snapshot)
+
             self.connection.execute(
-                "INSERT OR REPLACE INTO deliveries(delivery_id, state) VALUES (?, 'accepted')",
+                "INSERT INTO deliveries(delivery_id, state) VALUES (?, 'pending')",
                 (delivery_id,),
             )
             self.connection.execute(
-                "INSERT OR REPLACE INTO review_snapshots(delivery_id, snapshot_json) VALUES (?, ?)",
+                "INSERT INTO review_snapshots(delivery_id, snapshot_json) VALUES (?, ?)",
                 (delivery_id, snapshot_json),
             )
         return IntakeResult("accepted", delivery_id, snapshot)
@@ -133,6 +166,28 @@ class WebhookIntake:
             "SELECT snapshot_json FROM review_snapshots WHERE delivery_id = ?", (delivery_id,)
         ).fetchone()
         return bool(row and json.loads(row[0])["head_sha"] == head_sha)
+
+    def get_snapshot(self, delivery_id: str) -> ReviewSnapshot | None:
+        """Fetch the persisted immutable review snapshot for a delivery."""
+        row = self.connection.execute(
+            "SELECT snapshot_json FROM review_snapshots WHERE delivery_id = ?",
+            (delivery_id,),
+        ).fetchone()
+        if not row or not row[0]:
+            return None
+        data = json.loads(row[0])
+        return ReviewSnapshot(
+            repository_id=data["repository_id"],
+            repository_full_name=data["repository_full_name"],
+            pull_request_number=data["pull_request_number"],
+            base_sha=data["base_sha"],
+            head_sha=data["head_sha"],
+            changed_files=tuple(data.get("changed_files", ())),
+            policy_version=data["policy_version"],
+            prompt_version=data["prompt_version"],
+            retrieval_index_version=data["retrieval_index_version"],
+            model_configuration=dict(data.get("model_configuration", {})),
+        )
 
     def _create_schema(self) -> None:
         with self.connection:

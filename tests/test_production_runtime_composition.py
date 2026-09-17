@@ -268,6 +268,71 @@ class TestBackendConfigurationValidation(unittest.TestCase):
         self.assertIn("Missing required REDIS_URL", str(ctx.exception))
 
 
+class TestBackendFailClosedComposition(unittest.TestCase):
+    """Verify that selecting production backends with missing configs fails closed without silent fallback."""
+
+    def test_explicit_redis_queue_missing_url_fails_closed(self) -> None:
+        """E: QUEUE_BACKEND=redis without REDIS_URL fails closed across server, worker, and arq."""
+        conn = sqlite3.connect(":memory:", check_same_thread=False)
+        cfg = make_test_config(queue_backend="redis", redis_url="")
+
+        # 1. Server fails closed
+        with self.assertRaises(ValueError) as ctx:
+            create_server_app(cfg, connection=conn)
+        self.assertIn("REDIS_URL is required when QUEUE_BACKEND is 'redis'", str(ctx.exception))
+
+        # 2. Worker fails closed
+        with self.assertRaises(ValueError) as ctx:
+            AutonomousReviewWorker(cfg, connection=conn)
+        self.assertIn("REDIS_URL is required when QUEUE_BACKEND is 'redis'", str(ctx.exception))
+
+        # 3. ARQ startup fails closed
+        async def run_arq() -> None:
+            await arq_startup({"config": cfg})
+
+        with self.assertRaises(ValueError) as ctx:
+            asyncio.run(run_arq())
+        self.assertIn("REDIS_URL is required when QUEUE_BACKEND is 'redis'", str(ctx.exception))
+
+        # 4. get_redis_settings fails closed
+        from pr_review_agent.worker import get_redis_settings
+        with self.assertRaises(ValueError) as ctx:
+            get_redis_settings(cfg)
+        self.assertIn("REDIS_URL is required when QUEUE_BACKEND is 'redis'", str(ctx.exception))
+
+    def test_explicit_redis_checkpoint_missing_url_fails_closed(self) -> None:
+        """F: CHECKPOINT_BACKEND=redis without REDIS_URL fails closed in worker composition."""
+        conn = sqlite3.connect(":memory:", check_same_thread=False)
+        cfg = make_test_config(checkpoint_backend="redis", redis_url="")
+
+        with self.assertRaises(ValueError) as ctx:
+            AutonomousReviewWorker(cfg, connection=conn)
+        self.assertIn("REDIS_URL is required when CHECKPOINT_BACKEND is 'redis'", str(ctx.exception))
+
+    def test_explicit_tiger_missing_url_fails_closed(self) -> None:
+        """G: DATABASE_BACKEND=tiger without TIGER_DATABASE_URL fails closed across server, worker, and arq."""
+        conn = sqlite3.connect(":memory:", check_same_thread=False)
+        cfg = make_test_config(database_backend="tiger", tiger_database_url="")
+
+        # 1. Server fails closed
+        with self.assertRaises(TigerConfigurationError) as ctx:
+            create_server_app(cfg, connection=conn)
+        self.assertIn("TIGER_DATABASE_URL is required when DATABASE_BACKEND is 'tiger'", str(ctx.exception))
+
+        # 2. Worker fails closed
+        with self.assertRaises(TigerConfigurationError) as ctx:
+            AutonomousReviewWorker(cfg, connection=conn)
+        self.assertIn("TIGER_DATABASE_URL is required when DATABASE_BACKEND is 'tiger'", str(ctx.exception))
+
+        # 3. ARQ startup fails closed
+        async def run_arq() -> None:
+            await arq_startup({"config": cfg})
+
+        with self.assertRaises(TigerConfigurationError) as ctx:
+            asyncio.run(run_arq())
+        self.assertIn("TIGER_DATABASE_URL is required when DATABASE_BACKEND is 'tiger'", str(ctx.exception))
+
+
 # ============================================================================
 # B. SQLITE REFERENCE COMPOSITION
 # ============================================================================
@@ -407,6 +472,66 @@ class TestRedisCheckpointComposition(unittest.TestCase):
         self.assertIsInstance(worker.checkpointer, RedisCheckpointSaver)
         self.assertEqual(worker.checkpointer.redis_url, "redis://127.0.0.1:6379/0")
         worker.close()
+
+    def test_owned_redis_resources_closed_and_injected_preserved(self) -> None:
+        """I: AutonomousReviewWorker cleans up owned Redis checkpointer and queue, but preserves caller-injected instances."""
+        conn = sqlite3.connect(":memory:", check_same_thread=False)
+
+        # 1. Injected resources -> Worker does NOT close them on worker.close()
+        in_memory_queue = InMemoryRedisClient()
+        injected_queue = RedisJobQueue(client=in_memory_queue)
+        in_memory_cp = InMemoryRedisCheckpointClient()
+        injected_cp = RedisCheckpointSaver(client=in_memory_cp)
+
+        cfg_injected = make_test_config(
+            queue_backend="redis",
+            redis_url="redis://127.0.0.1:6379/0",
+            checkpoint_backend="redis",
+        )
+        worker_injected = AutonomousReviewWorker(
+            cfg_injected,
+            connection=conn,
+            queue=injected_queue,
+            checkpointer=injected_cp,
+        )
+        self.assertFalse(worker_injected._owns_queue)
+        self.assertFalse(worker_injected._owns_checkpointer)
+
+        worker_injected.close()
+        self.assertFalse(in_memory_cp.closed)
+
+        # 2. Owned checkpointer and queue -> Worker closes them on worker.close()
+        cfg_owned = make_test_config(
+            queue_backend="redis",
+            redis_url="redis://127.0.0.1:6379/0",
+            checkpoint_backend="redis",
+        )
+        worker_owned = AutonomousReviewWorker(cfg_owned, connection=conn)
+        self.assertTrue(worker_owned._owns_queue)
+        self.assertTrue(worker_owned._owns_checkpointer)
+
+        queue_closed = False
+        cp_closed = False
+        orig_queue_close = worker_owned.queue.close
+        orig_cp_close = worker_owned.checkpointer.close
+
+        def close_queue() -> None:
+            nonlocal queue_closed
+            queue_closed = True
+            orig_queue_close()
+
+        def close_cp() -> None:
+            nonlocal cp_closed
+            cp_closed = True
+            orig_cp_close()
+
+        worker_owned.queue.close = close_queue
+        worker_owned.checkpointer.close = close_cp
+
+        worker_owned.close()
+        self.assertTrue(queue_closed)
+        self.assertTrue(cp_closed)
+        conn.close()
 
 
 # ============================================================================
@@ -717,6 +842,61 @@ class TestGitHubEffectStoreSemanticParity(unittest.TestCase):
             self.assertEqual(reconciled_effect["status"], "published")
             self.assertEqual(reconciled_effect["review_id"], "rev-reconciled-666")
 
+    def test_sqlite_effect_store_cannot_regress_published_under_concurrent_write_timing(self) -> None:
+        """H: SQLiteEffectStore atomically prevents regression of PUBLISHED even under concurrent multi-threaded writes."""
+        store = self.sqlite_store
+        key = "race-key-atomic-non-regression"
+
+        # Advance to PUBLISHED first
+        store.record_effect(
+            idempotency_key=key,
+            repository_id="org/repo",
+            pull_number=1,
+            head_sha="head123",
+            canonical_id="cand-1",
+            status="published",
+            review_id="rev-atomic-1",
+            comment_id="com-atomic-1",
+            html_url="https://github.com/org/repo/pull/1#rev-1",
+            published_inline=True,
+        )
+
+        errors: list[Exception] = []
+
+        def worker_thread(target_status: str, reason: str) -> None:
+            try:
+                for _ in range(25):
+                    store.record_effect(
+                        idempotency_key=key,
+                        repository_id="org/repo",
+                        pull_number=1,
+                        head_sha="head123",
+                        canonical_id="cand-1",
+                        status=target_status,
+                        reason=reason,
+                    )
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=worker_thread, args=("failed", "Network crash")),
+            threading.Thread(target=worker_thread, args=("pending", "Duplicate start")),
+            threading.Thread(target=worker_thread, args=("ambiguous", "Timeout")),
+            threading.Thread(target=worker_thread, args=("published", "Retry publish")),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(len(errors), 0)
+
+        # Atomic engine invariant: effect MUST remain published
+        effect = store.get_effect(key)
+        self.assertIsNotNone(effect)
+        self.assertEqual(effect["status"], "published")
+        self.assertEqual(effect["review_id"], "rev-atomic-1")
+
 
 # ============================================================================
 # I. WEBHOOK DELIVERY AUTHORITY (CASES A - E)
@@ -745,7 +925,15 @@ class TestWebhookDeliveryAuthority(unittest.TestCase):
     def tearDown(self) -> None:
         self.conn.close()
 
-    def _create_signed_payload(self, delivery_id: str, action: str = "opened") -> tuple[bytes, dict[str, str]]:
+    def _create_signed_payload(
+        self,
+        delivery_id: str,
+        action: str = "opened",
+        repository_id: str = "test-org/test-repo",
+        pull_request_number: int = 1,
+        base_sha: str = "base123",
+        head_sha: str = "head123",
+    ) -> tuple[bytes, dict[str, str]]:
         import hashlib
         import hmac
 
@@ -754,13 +942,13 @@ class TestWebhookDeliveryAuthority(unittest.TestCase):
             "delivery_id": delivery_id,
             "repository": {
                 "id": 12345,
-                "full_name": "test-org/test-repo",
-                "owner": {"login": "test-org"},
+                "full_name": repository_id,
+                "owner": {"login": repository_id.split("/")[0]},
             },
             "pull_request": {
-                "number": 1,
-                "base": {"sha": "base123"},
-                "head": {"sha": "head123"},
+                "number": pull_request_number,
+                "base": {"sha": base_sha},
+                "head": {"sha": head_sha},
             },
         }
         body = json.dumps(payload).encode("utf-8")
@@ -842,25 +1030,41 @@ class TestWebhookDeliveryAuthority(unittest.TestCase):
         self.assertEqual(deliv_state, "enqueued")
 
     def test_case_d_redis_commit_plus_client_response_loss(self) -> None:
-        """Case D: Redis committed job but client response timed out -> retry discovers existing Redis job."""
-        snapshot = make_test_snapshot(base_sha="base123", head_sha="head123")
-        enqueued_job = self.redis_queue.enqueue(
-            delivery_id="deliv-case-d",
-            snapshot=snapshot,
-        )
-
+        """Case D: First HTTP request creates durable job; client response lost; retry reconciles existing job."""
         body, headers = self._create_signed_payload("deliv-case-d")
-        res = self.client.post("/webhooks/github", content=body, headers=headers)
 
-        self.assertEqual(res.status_code, 202)
-        data = res.json()
-        self.assertEqual(data["job_id"], enqueued_job.job_id)
+        # 1. First webhook request creates the durable job
+        res1 = self.client.post("/webhooks/github", content=body, headers=headers)
+        self.assertEqual(res1.status_code, 202)
+        job_id_1 = res1.json()["job_id"]
 
-        # Ensure attempt count was not reset or corrupted
-        job_after = self.redis_queue.get_job_by_delivery("deliv-case-d")
+        # Verify durable queue job was created
+        job1 = self.redis_queue.get_job(job_id_1)
+        self.assertIsNotNone(job1)
+
+        # Worker leases job and starts attempt 1
+        leased_job = self.redis_queue.lease_next_job(now=time.time())
+        self.assertIsNotNone(leased_job)
+        self.assertEqual(leased_job.job_id, job_id_1)
+        self.assertEqual(leased_job.attempt_count, 1)
+        self.assertEqual(leased_job.state, JobState.RUNNING)
+        original_lease_token = leased_job.lease_token
+
+        # 2. Treat response 1 as lost from client's perspective; second identical webhook arrives
+        res2 = self.client.post("/webhooks/github", content=body, headers=headers)
+        self.assertEqual(res2.status_code, 200)
+        data2 = res2.json()
+        self.assertEqual(data2["status"], "duplicate")
+        self.assertEqual(data2["job_id"], job_id_1)
+
+        # 3. Invariants: existing job reconciled, same job_id returned, attempt_count unchanged,
+        # queue state unchanged, lease token unchanged
+        job_after = self.redis_queue.get_job(job_id_1)
         self.assertIsNotNone(job_after)
-        self.assertEqual(job_after.attempt_count, 0)
-        self.assertEqual(job_after.state, JobState.QUEUED)
+        self.assertEqual(job_after.job_id, job_id_1)
+        self.assertEqual(job_after.attempt_count, 1)
+        self.assertEqual(job_after.state, JobState.RUNNING)
+        self.assertEqual(job_after.lease_token, original_lease_token)
 
     def test_case_e_duplicate_delivery_after_successful_enqueue(self) -> None:
         """Case E: Duplicate delivery after success returns existing job without resetting attempts/lease."""
@@ -887,6 +1091,101 @@ class TestWebhookDeliveryAuthority(unittest.TestCase):
         self.assertEqual(job_after.attempt_count, 1)
         self.assertEqual(job_after.state, JobState.RUNNING)
         self.assertEqual(job_after.lease_token, leased_job.lease_token)
+
+    def test_concurrent_pending_duplicate_cannot_produce_false_duplicate_with_no_job(self) -> None:
+        """A: Delivery in local pending state without queue job safely attempts enqueue, never returning false 200."""
+        # Pre-seed intake with a pending delivery, but queue has no job
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO deliveries (delivery_id, state) VALUES (?, 'pending')",
+                ("deliv-pending-race",),
+            )
+
+        # Case A.1: Redis is unavailable -> returns 503, NEVER false 200 duplicate
+        self.in_memory_redis.drop_connection = True
+        body, headers = self._create_signed_payload("deliv-pending-race")
+        res1 = self.client.post("/webhooks/github", content=body, headers=headers)
+        self.assertEqual(res1.status_code, 503)
+
+        # Case A.2: Redis is available -> safely attempts deterministic enqueue -> returns 202
+        self.in_memory_redis.drop_connection = False
+        res2 = self.client.post("/webhooks/github", content=body, headers=headers)
+        self.assertEqual(res2.status_code, 202)
+        job = self.redis_queue.get_job_by_delivery("deliv-pending-race")
+        self.assertIsNotNone(job)
+        self.assertEqual(job.job_id, res2.json()["job_id"])
+
+    def test_existing_delivery_with_missing_queue_job_replayed_safely(self) -> None:
+        """B: Delivery marked enqueued locally but queue job missing -> safely replays enqueue instead of false 200."""
+        body, headers = self._create_signed_payload("deliv-missing-job")
+        res1 = self.client.post("/webhooks/github", content=body, headers=headers)
+        self.assertEqual(res1.status_code, 202)
+        job_id_1 = res1.json()["job_id"]
+
+        # Evict / delete job from Redis directly to simulate queue loss
+        self.in_memory_redis.delete(f"review:job:{job_id_1}")
+        self.in_memory_redis.delete("review:delivery:deliv-missing-job")
+        self.assertIsNone(self.redis_queue.get_job_by_delivery("deliv-missing-job"))
+
+        # Local intake still has state 'enqueued'
+        self.assertEqual(self.intake.get_delivery_state("deliv-missing-job"), "enqueued")
+
+        # Duplicate delivery arrives -> must NOT return false 200 duplicate!
+        res2 = self.client.post("/webhooks/github", content=body, headers=headers)
+        self.assertEqual(res2.status_code, 202)
+        replayed_job_id = res2.json()["job_id"]
+
+        # Durable queue job exists again
+        job_replayed = self.redis_queue.get_job_by_delivery("deliv-missing-job")
+        self.assertIsNotNone(job_replayed)
+        self.assertEqual(job_replayed.job_id, replayed_job_id)
+
+    def test_immutable_snapshot_survives_enqueue_failure_and_retry(self) -> None:
+        """C: Snapshot created on first intake is immutable and survives enqueue failure and subsequent retry."""
+        self.in_memory_redis.drop_connection = True
+        body, headers = self._create_signed_payload("deliv-snapshot-immutable")
+        res1 = self.client.post("/webhooks/github", content=body, headers=headers)
+        self.assertEqual(res1.status_code, 503)
+
+        # Snapshot was stored during first intake
+        orig_snapshot = self.intake.get_snapshot("deliv-snapshot-immutable")
+        self.assertIsNotNone(orig_snapshot)
+        self.assertEqual(orig_snapshot.head_sha, "head123")
+
+        # Redis recovers and retry arrives
+        self.in_memory_redis.drop_connection = False
+        res2 = self.client.post("/webhooks/github", content=body, headers=headers)
+        self.assertEqual(res2.status_code, 202)
+
+        # Snapshot in intake is unchanged
+        snapshot_after = self.intake.get_snapshot("deliv-snapshot-immutable")
+        self.assertEqual(orig_snapshot, snapshot_after)
+
+        # Job in queue has exact snapshot contents
+        job = self.redis_queue.get_job_by_delivery("deliv-snapshot-immutable")
+        self.assertIsNotNone(job)
+        self.assertEqual(job.head_sha, "head123")
+
+    def test_conflicting_retry_snapshot_rejected_fail_closed(self) -> None:
+        """D: Retry with identical delivery_id but conflicting head SHA fails closed with HTTP 409."""
+        body1, headers1 = self._create_signed_payload("deliv-conflict-test", head_sha="sha_original_123")
+        res1 = self.client.post("/webhooks/github", content=body1, headers=headers1)
+        self.assertEqual(res1.status_code, 202)
+
+        # Second delivery with SAME delivery_id but DIFFERENT head SHA
+        body2, headers2 = self._create_signed_payload("deliv-conflict-test", head_sha="sha_mutated_456")
+        res2 = self.client.post("/webhooks/github", content=body2, headers=headers2)
+        self.assertEqual(res2.status_code, 409)
+        self.assertEqual(res2.json()["status"], "rejected")
+
+        # Verify original snapshot and queue job were NOT corrupted or overwritten
+        job = self.redis_queue.get_job_by_delivery("deliv-conflict-test")
+        self.assertIsNotNone(job)
+        self.assertEqual(job.head_sha, "sha_original_123")
+
+        snapshot = self.intake.get_snapshot("deliv-conflict-test")
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(snapshot.head_sha, "sha_original_123")
 
 
 if __name__ == "__main__":

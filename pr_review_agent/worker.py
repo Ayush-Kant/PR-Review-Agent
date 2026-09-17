@@ -160,14 +160,21 @@ class AutonomousReviewWorker:
                 tiger_cfg = TigerConfig.from_url(config.tiger_database_url)
                 self.tiger_connection_manager = TigerConnectionManager(tiger_cfg)
                 self._owns_tiger_manager = True
+            else:
+                raise TigerConfigurationError("TIGER_DATABASE_URL is required when DATABASE_BACKEND is 'tiger'")
 
         # Queue composition
+        self._owns_queue = False
         if queue is not None:
             self.queue = queue
-        elif getattr(config, "queue_backend", "sqlite") == "redis" and getattr(config, "redis_url", ""):
+        elif getattr(config, "queue_backend", "sqlite") == "redis":
+            if not getattr(config, "redis_url", ""):
+                raise ValueError("REDIS_URL is required when QUEUE_BACKEND is 'redis'")
             self.queue = RedisJobQueue(redis_url=config.redis_url)
+            self._owns_queue = True
         else:
             self.queue = DurableJobQueue(self.connection)
+            self._owns_queue = True
 
         # Audit Spine composition
         if audit_spine is not None:
@@ -232,10 +239,14 @@ class AutonomousReviewWorker:
             self.github_client,
         )
 
+        self._owns_checkpointer = False
         self.checkpointer = checkpointer
-        if self.checkpointer is None and getattr(config, "checkpoint_backend", "none") == "redis" and getattr(config, "redis_url", ""):
+        if self.checkpointer is None and getattr(config, "checkpoint_backend", "none") == "redis":
+            if not getattr(config, "redis_url", ""):
+                raise ValueError("REDIS_URL is required when CHECKPOINT_BACKEND is 'redis'")
             from pr_review_agent.adapters.redis_checkpoint import RedisCheckpointSaver
             self.checkpointer = RedisCheckpointSaver(redis_url=config.redis_url)
+            self._owns_checkpointer = True
 
         if orchestrator is not None:
             self.orchestrator = orchestrator
@@ -595,6 +606,10 @@ class AutonomousReviewWorker:
 
     def close(self) -> None:
         """Cleanly close underlying resources."""
+        if getattr(self, "_owns_checkpointer", False) and self.checkpointer is not None and hasattr(self.checkpointer, "close"):
+            self.checkpointer.close()
+        if getattr(self, "_owns_queue", False) and self.queue is not None and hasattr(self.queue, "close"):
+            self.queue.close()
         if self._owns_github_client and hasattr(self.github_client, "close"):
             self.github_client.close()
         if self._owns_connection and self.connection is not None:
@@ -638,7 +653,9 @@ async def arq_startup(ctx: dict[str, Any]) -> None:
     # Initialize queue if not already injected
     if "queue" not in ctx:
         if getattr(config, "queue_backend", "sqlite") == "redis":
-            redis_url = getattr(config, "redis_url", None) or "redis://127.0.0.1:6379/0"
+            redis_url = getattr(config, "redis_url", None)
+            if not redis_url:
+                raise ValueError("REDIS_URL is required when QUEUE_BACKEND is 'redis'")
             ctx["queue"] = RedisJobQueue(redis_url=redis_url)
         else:
             conn = sqlite3.connect(config.database_path, check_same_thread=False)
@@ -649,6 +666,8 @@ async def arq_startup(ctx: dict[str, Any]) -> None:
         if getattr(config, "tiger_database_url", ""):
             tiger_cfg = TigerConfig.from_url(config.tiger_database_url)
             ctx["tiger_connection_manager"] = TigerConnectionManager(tiger_cfg)
+        else:
+            raise TigerConfigurationError("TIGER_DATABASE_URL is required when DATABASE_BACKEND is 'tiger'")
 
     # Initialize AutonomousReviewWorker if not already injected
     if "worker" not in ctx:
@@ -675,7 +694,10 @@ async def arq_shutdown(ctx: dict[str, Any]) -> None:
 def get_redis_settings(config: ServiceConfig | None = None) -> RedisSettings:
     """Derive ARQ RedisSettings from application configuration."""
     cfg = config or load_service_config(require_live_credentials=False)
-    redis_url = getattr(cfg, "redis_url", None) or "redis://127.0.0.1:6379/0"
+    redis_url = getattr(cfg, "redis_url", None)
+    if getattr(cfg, "queue_backend", "sqlite") == "redis" and not redis_url:
+        raise ValueError("REDIS_URL is required when QUEUE_BACKEND is 'redis'")
+    redis_url = redis_url or "redis://127.0.0.1:6379/0"
     return RedisSettings.from_dsn(redis_url)
 
 

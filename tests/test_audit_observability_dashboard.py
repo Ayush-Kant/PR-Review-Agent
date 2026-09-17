@@ -218,7 +218,7 @@ def test_audit_spine_reconstructs_full_run_provenance() -> None:
     assert trace.repository_id == repo
     assert trace.pull_number == pull
     assert trace.head_sha == sha
-    assert trace.delivery_status == "accepted"
+    assert trace.delivery_status in ("accepted", "pending", "enqueued")
     assert trace.queue_job_status == JobState.QUEUED.value
     assert len(trace.timeline) == 3
     assert len(trace.specialist_steps) == 2

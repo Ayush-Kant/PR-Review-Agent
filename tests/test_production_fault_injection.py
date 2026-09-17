@@ -201,6 +201,10 @@ class FaultInjectingRedisClient(InMemoryRedisClient):
         self._check_fault("zrem")
         return super().zrem(name, *values)
 
+    def delete(self, *names: Any) -> int:
+        self._check_fault("delete")
+        return super().delete(*names)
+
     def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
         self._check_fault("eval")
         # Execute underlying Lua logic

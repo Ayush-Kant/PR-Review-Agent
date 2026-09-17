@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-17T22:26:35.124Z
+- plan approval: Ayush Kant at 2026-09-17T23:26:11.132Z
 
 ## Tasks
 
@@ -188,6 +188,14 @@
 
 - state/risk: done / medium
 - requirements: FR-02, FR-03, FR-12, FR-15, NFR-03
+- scope: not bounded
+- gates: test: python -m pytest tests/test_production_runtime_composition.py, independent-review: pass
+- next: Run the task pre-flight.
+
+### production-runtime-composition-corrections — Correct post-review edge cases in production runtime composition without changing the architecture or advancing to W1-08B
+
+- state/risk: done / medium
+- requirements: FR-02, FR-04, FR-12, FR-15, NFR-03
 - scope: not bounded
 - gates: test: python -m pytest tests/test_production_runtime_composition.py, independent-review: pass
 - next: Run the task pre-flight.

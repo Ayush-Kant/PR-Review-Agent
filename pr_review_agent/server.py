@@ -9,7 +9,11 @@ from starlette.applications import Starlette
 import uvicorn
 
 from pr_review_agent.adapters.redis_queue import RedisJobQueue
-from pr_review_agent.adapters.tiger_connection import TigerConfig, TigerConnectionManager
+from pr_review_agent.adapters.tiger_connection import (
+    TigerConfig,
+    TigerConfigurationError,
+    TigerConnectionManager,
+)
 from pr_review_agent.adapters.tiger_stores import TigerAuditSpine
 from pr_review_agent.adapters.webhook_ingress import create_webhook_app
 from pr_review_agent.intake import WebhookIntake
@@ -34,20 +38,21 @@ def create_server_app(
     intake = WebhookIntake(conn, config.webhook_secret)
 
     if job_queue is None:
-        if getattr(config, "queue_backend", "sqlite") == "redis" and getattr(config, "redis_url", ""):
+        if getattr(config, "queue_backend", "sqlite") == "redis":
+            if not getattr(config, "redis_url", ""):
+                raise ValueError("REDIS_URL is required when QUEUE_BACKEND is 'redis'")
             job_queue = RedisJobQueue(redis_url=config.redis_url)
         else:
             job_queue = DurableJobQueue(conn)
 
     if audit_spine is None:
         if getattr(config, "database_backend", "sqlite") == "tiger":
-            if tiger_connection_manager is None and getattr(config, "tiger_database_url", ""):
+            if tiger_connection_manager is None:
+                if not getattr(config, "tiger_database_url", ""):
+                    raise TigerConfigurationError("TIGER_DATABASE_URL is required when DATABASE_BACKEND is 'tiger'")
                 tiger_cfg = TigerConfig.from_url(config.tiger_database_url)
                 tiger_connection_manager = TigerConnectionManager(tiger_cfg)
-            if tiger_connection_manager is not None:
-                audit_spine = TigerAuditSpine(tiger_connection_manager)
-            else:
-                audit_spine = AuditSpine(conn)
+            audit_spine = TigerAuditSpine(tiger_connection_manager)
         else:
             audit_spine = AuditSpine(conn)
 

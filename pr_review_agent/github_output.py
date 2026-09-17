@@ -9,6 +9,7 @@ from enum import Enum
 import hashlib
 import json
 import sqlite3
+import threading
 import time
 
 from pr_review_agent.policy import (
@@ -295,10 +296,11 @@ class SQLiteEffectStore(GitHubEffectStoreProtocol):
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
+        self._lock = threading.RLock()
         self._create_schema()
 
     def _create_schema(self) -> None:
-        with self.connection:
+        with self._lock, self.connection:
             self.connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS github_review_effects (
@@ -326,16 +328,17 @@ class SQLiteEffectStore(GitHubEffectStoreProtocol):
             )
 
     def get_effect(self, idempotency_key: str) -> dict[str, Any] | None:
-        row = self.connection.execute(
-            """
-            SELECT idempotency_key, repository_id, pull_number, head_sha,
-                   canonical_id, status, review_id, comment_id, html_url,
-                   published_inline, reason, payload_json, created_at
-            FROM github_review_effects
-            WHERE idempotency_key = ?
-            """,
-            (idempotency_key,),
-        ).fetchone()
+        with self._lock:
+            row = self.connection.execute(
+                """
+                SELECT idempotency_key, repository_id, pull_number, head_sha,
+                       canonical_id, status, review_id, comment_id, html_url,
+                       published_inline, reason, payload_json, created_at
+                FROM github_review_effects
+                WHERE idempotency_key = ?
+                """,
+                (idempotency_key,),
+            ).fetchone()
         if not row:
             return None
         return {
@@ -373,18 +376,23 @@ class SQLiteEffectStore(GitHubEffectStoreProtocol):
     ) -> None:
         current_time = time.time() if now is None else now
         payload_json = json.dumps(payload or {}, sort_keys=True)
-        # Prevent regressing an already published effect to non-published status
-        existing = self.get_effect(idempotency_key)
-        if existing and existing.get("status") == "published" and status != "published":
-            return
-        with self.connection:
+        with self._lock, self.connection:
             self.connection.execute(
                 """
-                INSERT OR REPLACE INTO github_review_effects (
+                INSERT INTO github_review_effects (
                     idempotency_key, repository_id, pull_number, head_sha,
                     canonical_id, status, review_id, comment_id, html_url,
                     published_inline, reason, payload_json, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(idempotency_key) DO UPDATE SET
+                    status = excluded.status,
+                    review_id = COALESCE(excluded.review_id, github_review_effects.review_id),
+                    comment_id = COALESCE(excluded.comment_id, github_review_effects.comment_id),
+                    html_url = COALESCE(excluded.html_url, github_review_effects.html_url),
+                    published_inline = excluded.published_inline,
+                    reason = COALESCE(excluded.reason, github_review_effects.reason),
+                    payload_json = excluded.payload_json
+                WHERE github_review_effects.status != 'published' OR excluded.status = 'published'
                 """,
                 (
                     idempotency_key,
