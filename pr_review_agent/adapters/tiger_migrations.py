@@ -50,11 +50,21 @@ class Migration:
 
 @dataclass(frozen=True)
 class CapabilityReport:
-    """Report of detected PostgreSQL extension capabilities."""
+    """Report of detected PostgreSQL extension capabilities.
+
+    Invariants:
+    - has_vector / has_timescaledb / has_vectorscale are True ONLY when the extension is
+      actually installed in pg_extension (i.e. usable for DDL/types/functions).
+    - vector_available / timescaledb_available / vectorscale_available reflect presence
+      in pg_available_extensions (available for installation, but not currently usable).
+    """
 
     has_vector: bool = False
     has_timescaledb: bool = False
     has_vectorscale: bool = False
+    vector_available: bool = False
+    timescaledb_available: bool = False
+    vectorscale_available: bool = False
     installed_extensions: tuple[str, ...] = field(default_factory=tuple)
     available_extensions: tuple[str, ...] = field(default_factory=tuple)
 
@@ -88,14 +98,22 @@ class ExtensionInspector:
         except Exception as exc:
             logger.debug("Failed to query pg_available_extensions: %s", exc)
 
-        has_vector = ("vector" in installed) or ("vector" in available)
-        has_timescaledb = ("timescaledb" in installed) or ("timescaledb" in available)
-        has_vectorscale = ("vectorscale" in installed) or ("vectorscale" in available)
+        # Distinguish installed (usable) from merely available (not usable until installed)
+        has_vector = "vector" in installed
+        has_timescaledb = "timescaledb" in installed
+        has_vectorscale = "vectorscale" in installed
+
+        vector_available = "vector" in available
+        timescaledb_available = "timescaledb" in available
+        vectorscale_available = "vectorscale" in available
 
         return CapabilityReport(
             has_vector=has_vector,
             has_timescaledb=has_timescaledb,
             has_vectorscale=has_vectorscale,
+            vector_available=vector_available,
+            timescaledb_available=timescaledb_available,
+            vectorscale_available=vectorscale_available,
             installed_extensions=tuple(sorted(installed)),
             available_extensions=tuple(sorted(available)),
         )
@@ -184,14 +202,19 @@ class MigrationRunner:
         return {int(row[0]): str(row[1]) for row in rows}
 
     def verify_extensions(self) -> CapabilityReport:
-        """Verify available database extensions before applying migrations.
+        """Verify installed database extensions before applying migrations.
 
-        Fails closed if require_vector is True and vector is unsupported.
+        Fails closed if require_vector is True and vector is not installed in pg_extension.
         """
         report = self.inspector.inspect()
         if self.require_vector and not report.has_vector:
+            if report.vector_available:
+                raise TigerExtensionError(
+                    "Required PostgreSQL extension 'pgvector' is available in the cluster but NOT installed in pg_extension. "
+                    "Migration cannot proceed without vector support actually installed."
+                )
             raise TigerExtensionError(
-                "Required PostgreSQL extension 'pgvector' is not available in the target database. "
+                "Required PostgreSQL extension 'pgvector' is not installed in the target database. "
                 "Migration cannot proceed without vector support."
             )
         return report
@@ -221,6 +244,19 @@ class MigrationRunner:
                     )
                 logger.debug("Migration %d ('%s') already applied, skipping.", m.version, m.name)
                 continue
+
+            # Fail closed before attempting vector-dependent DDL when pgvector is not installed
+            if re.search(r"\bvector\b", m.sql, re.IGNORECASE) and not capabilities.has_vector:
+                if capabilities.vector_available:
+                    raise TigerExtensionError(
+                        f"Migration {m.version} ('{m.name}') contains vector-dependent DDL but 'pgvector' "
+                        "is only available, not installed in pg_extension. Automatic extension installation "
+                        "is prohibited without Genesis authorization; fail closed."
+                    )
+                raise TigerExtensionError(
+                    f"Migration {m.version} ('{m.name}') contains vector-dependent DDL but 'pgvector' "
+                    "is not installed in the target database."
+                )
 
             # Execute migration in a safe transaction
             logger.info("Applying migration %d: %s", m.version, m.name)

@@ -4,7 +4,7 @@
 
 - workflow: new-product
 - phase: verify
-- plan approval: Ayush Kant at 2026-09-17T06:26:13.452Z
+- plan approval: Ayush Kant at 2026-09-17T10:29:15.146Z
 
 ## Tasks
 
@@ -157,6 +157,14 @@
 - state/risk: done / medium
 - requirements: FR-15
 - scope: not bounded
+- gates: test: python -m pytest tests/test_tiger_schema_and_connection.py, independent-review: pass
+- next: Run the task pre-flight.
+
+### tiger-schema-connection-correction — Perform tightly bounded W1-05 integrity correction for Tiger SSL enforcement, extension capability semantics, DiskANN vector index, deterministic validation honesty, and embedding dimension contract
+
+- state/risk: done / medium
+- requirements: FR-15
+- scope: pr_review_agent/adapters/tiger_connection.py, pr_review_agent/adapters/tiger_migrations.py, pr_review_agent/migrations/001_initial_tiger_schema.sql, tests/test_tiger_schema_and_connection.py
 - gates: test: python -m pytest tests/test_tiger_schema_and_connection.py, independent-review: pass
 - next: Run the task pre-flight.
 

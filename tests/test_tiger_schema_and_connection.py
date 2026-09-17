@@ -68,13 +68,22 @@ class DeterministicPostgresHarness:
     def __init__(
         self,
         *,
-        has_vector: bool = True,
-        has_timescaledb: bool = True,
-        has_vectorscale: bool = False,
+        vector_installed: bool = True,
+        vector_available: bool = True,
+        timescaledb_installed: bool = True,
+        timescaledb_available: bool = True,
+        vectorscale_installed: bool = False,
+        vectorscale_available: bool = False,
+        has_vector: bool | None = None,
+        has_timescaledb: bool | None = None,
+        has_vectorscale: bool | None = None,
     ) -> None:
-        self.has_vector = has_vector
-        self.has_timescaledb = has_timescaledb
-        self.has_vectorscale = has_vectorscale
+        self.vector_installed = has_vector if has_vector is not None else vector_installed
+        self.vector_available = has_vector if has_vector is not None else vector_available
+        self.timescaledb_installed = has_timescaledb if has_timescaledb is not None else timescaledb_installed
+        self.timescaledb_available = has_timescaledb if has_timescaledb is not None else timescaledb_available
+        self.vectorscale_installed = has_vectorscale if has_vectorscale is not None else vectorscale_installed
+        self.vectorscale_available = has_vectorscale if has_vectorscale is not None else vectorscale_available
 
         self.tables: dict[str, dict[str, Any]] = {}
         self.indexes: dict[str, dict[str, Any]] = {}
@@ -111,24 +120,24 @@ class DeterministicPostgresHarness:
         clean_q = query.strip()
         self.executed_statements.append(clean_q)
 
-        # 1. Extension inspection queries
+        # 1. Extension inspection queries (clearly distinguishing installed vs available)
         if "FROM pg_extension" in clean_q:
             installed = ["uuid-ossp", "pgcrypto"]
-            if self.has_vector:
+            if self.vector_installed:
                 installed.append("vector")
-            if self.has_timescaledb:
+            if self.timescaledb_installed:
                 installed.append("timescaledb")
-            if self.has_vectorscale:
+            if self.vectorscale_installed:
                 installed.append("vectorscale")
             return DeterministicCursor(self, rows=[(ext,) for ext in installed])
 
         if "FROM pg_available_extensions" in clean_q:
             available = ["uuid-ossp", "pgcrypto"]
-            if self.has_vector:
+            if self.vector_available:
                 available.append("vector")
-            if self.has_timescaledb:
+            if self.timescaledb_available:
                 available.append("timescaledb")
-            if self.has_vectorscale:
+            if self.vectorscale_available:
                 available.append("vectorscale")
             return DeterministicCursor(self, rows=[(ext,) for ext in available])
 
@@ -276,21 +285,79 @@ class TestTigerSchemaAndConnection(unittest.TestCase):
     # 3. SSL requirement/configuration is represented correctly
     # -------------------------------------------------------------------------
     def test_ssl_requirement_is_represented_correctly(self) -> None:
-        """3. SSL mode is parsed from query parameters or falls back to production default."""
-        # Explicit sslmode=verify-full
+        """3. SSL mode is parsed, validated against ALLOWED_SSL_MODES, and fails closed on disable/invalid."""
+        # A. Explicit allowed secure modes
         url1 = "postgres://u:p@host:5432/db?sslmode=verify-full"
         cfg1 = TigerConfig.from_url(url1)
         self.assertEqual("verify-full", cfg1.ssl_mode)
+        self.assertIn("sslmode=verify-full", cfg1.database_url)
 
-        # ssl=true parameter
+        url_ca = "postgres://u:p@host:5432/db?sslmode=verify-ca"
+        cfg_ca = TigerConfig.from_url(url_ca)
+        self.assertEqual("verify-ca", cfg_ca.ssl_mode)
+        self.assertIn("sslmode=verify-ca", cfg_ca.database_url)
+
+        # ssl=true parameter maps to require
         url2 = "postgres://u:p@host:5432/db?ssl=true"
         cfg2 = TigerConfig.from_url(url2)
         self.assertEqual("require", cfg2.ssl_mode)
+        self.assertIn("sslmode=require", cfg2.database_url)
 
         # Default is require
         url3 = "postgres://u:p@host:5432/db"
         cfg3 = TigerConfig.from_url(url3)
         self.assertEqual("require", cfg3.ssl_mode)
+        self.assertIn("sslmode=require", cfg3.database_url)
+
+        # B. Fail-closed: sslmode=disable is strictly rejected
+        disable_urls = [
+            "postgres://u:p@host:5432/db?sslmode=disable",
+            "postgres://u:p@host:5432/db?sslmode=DISABLE",
+            "postgres://u:p@host:5432/db?ssl=false",
+            "postgres://u:p@host:5432/db?ssl=0",
+        ]
+        for bad_url in disable_urls:
+            with self.assertRaises(TigerConfigurationError) as ctx:
+                TigerConfig.from_url(bad_url)
+            self.assertIn("prohibited", str(ctx.exception).lower())
+
+        with self.assertRaises(TigerConfigurationError):
+            TigerConfig.from_env({"TIGER_DATABASE_URL": "postgres://u:p@host:5432/db", "TIGER_SSL_MODE": "disable"})
+
+        with self.assertRaises(TigerConfigurationError):
+            TigerConfig(database_url="postgres://u:p@host:5432/db", host="host", ssl_mode="disable")
+
+        # C. Fail-closed: unapproved / insecure / arbitrary modes are rejected
+        invalid_urls = [
+            "postgres://u:p@host:5432/db?sslmode=prefer",
+            "postgres://u:p@host:5432/db?sslmode=allow",
+            "postgres://u:p@host:5432/db?sslmode=banana",
+            "postgres://u:p@host:5432/db?sslmode=no-verify",
+        ]
+        for bad_url in invalid_urls:
+            with self.assertRaises(TigerConfigurationError) as ctx:
+                TigerConfig.from_url(bad_url)
+            self.assertIn("invalid ssl mode", str(ctx.exception).lower())
+
+        with self.assertRaises(TigerConfigurationError):
+            TigerConfig.from_env({"TIGER_DATABASE_URL": "postgres://u:p@host:5432/db", "TIGER_SSL_MODE": "prefer"})
+
+    def test_psycopg_connection_path_enforces_validated_ssl_mode(self) -> None:
+        """3b. Real psycopg connection path explicitly passes validated sslmode and cannot bypass SSL."""
+        cfg = TigerConfig.from_url("postgres://u:secret@db.tigercloud.internal:5432/review_production?sslmode=verify-ca")
+        mgr = TigerConnectionManager(cfg)
+
+        mock_psycopg = MagicMock()
+        with patch.dict("sys.modules", {"psycopg": mock_psycopg}):
+            conn = mgr._create_real_connection()
+            self.assertEqual(mock_psycopg.connect.return_value, conn)
+            mock_psycopg.connect.assert_called_once()
+            call_kwargs = mock_psycopg.connect.call_args[1]
+            self.assertEqual("verify-ca", call_kwargs.get("sslmode"))
+            self.assertEqual(10.0, call_kwargs.get("connect_timeout"))
+            # Ensure URL conninfo itself also contains sslmode=verify-ca
+            call_args = mock_psycopg.connect.call_args[0]
+            self.assertIn("sslmode=verify-ca", call_args[0])
 
     # -------------------------------------------------------------------------
     # 4. Credentials are masked across repr, error messages, and URL masking utilities
@@ -352,7 +419,7 @@ class TestTigerSchemaAndConnection(unittest.TestCase):
     # -------------------------------------------------------------------------
     def test_migration_execution_is_idempotent(self) -> None:
         """7. Applying migrations twice produces identical state with zero duplicate errors."""
-        harness = DeterministicPostgresHarness()
+        harness = DeterministicPostgresHarness(vector_installed=True)
         runner = MigrationRunner(harness)
 
         # Pass 1: Applies initial migration
@@ -372,31 +439,74 @@ class TestTigerSchemaAndConnection(unittest.TestCase):
     # -------------------------------------------------------------------------
     # 8. Extension capability detection (pgvector, TimescaleDB, pgvectorscale)
     # -------------------------------------------------------------------------
-    def test_extension_capability_detection(self) -> None:
-        """8. ExtensionInspector detects installed/available extensions and reports accurately."""
-        # Harness with vector and timescaledb
-        harness = DeterministicPostgresHarness(has_vector=True, has_timescaledb=True, has_vectorscale=False)
-        inspector = ExtensionInspector(harness)
-        report = inspector.inspect()
+    def test_extension_capability_detection_and_installed_vs_available(self) -> None:
+        """8. ExtensionInspector strictly distinguishes installed from available extensions."""
+        # Case A: Vector installed and available -> capability True, migration succeeds
+        harness_installed = DeterministicPostgresHarness(vector_installed=True, vector_available=True)
+        inspector_a = ExtensionInspector(harness_installed)
+        report_a = inspector_a.inspect()
+        self.assertTrue(report_a.has_vector)
+        self.assertTrue(report_a.vector_available)
+        self.assertIn("vector", report_a.installed_extensions)
+        self.assertIn("vector", report_a.available_extensions)
+        runner_a = MigrationRunner(harness_installed)
+        applied = runner_a.apply_all()
+        self.assertEqual(1, len(applied))
 
-        self.assertTrue(report.has_vector)
-        self.assertTrue(report.has_timescaledb)
-        self.assertFalse(report.has_vectorscale)
-        self.assertIn("vector", report.installed_extensions)
-        self.assertIn("timescaledb", report.installed_extensions)
+        # Case B: Vector available in cluster but NOT installed in pg_extension
+        # Must report has_vector=False, vector_available=True, and fail closed before vector DDL!
+        harness_available_only = DeterministicPostgresHarness(vector_installed=False, vector_available=True)
+        inspector_b = ExtensionInspector(harness_available_only)
+        report_b = inspector_b.inspect()
+        self.assertFalse(report_b.has_vector, "Available extension must NOT be treated as installed capability")
+        self.assertTrue(report_b.vector_available)
+        self.assertNotIn("vector", report_b.installed_extensions)
+        self.assertIn("vector", report_b.available_extensions)
 
-        # Fail-closed test when require_vector=True but vector is missing
-        no_vector_harness = DeterministicPostgresHarness(has_vector=False)
-        runner_fail = MigrationRunner(no_vector_harness, require_vector=True)
+        runner_b = MigrationRunner(harness_available_only)
+        with self.assertRaises(TigerExtensionError) as ctx_b:
+            runner_b.apply_all()
+        self.assertIn("available", str(ctx_b.exception).lower())
+        self.assertIn("not installed", str(ctx_b.exception).lower())
+
+        # verify_extensions fail-closed when require_vector=True
+        runner_b_req = MigrationRunner(harness_available_only, require_vector=True)
         with self.assertRaises(TigerExtensionError):
-            runner_fail.verify_extensions()
+            runner_b_req.verify_extensions()
+
+        # Case C: Vector completely unavailable
+        harness_unavailable = DeterministicPostgresHarness(vector_installed=False, vector_available=False)
+        inspector_c = ExtensionInspector(harness_unavailable)
+        report_c = inspector_c.inspect()
+        self.assertFalse(report_c.has_vector)
+        self.assertFalse(report_c.vector_available)
+        runner_c = MigrationRunner(harness_unavailable)
+        with self.assertRaises(TigerExtensionError):
+            runner_c.apply_all()
+        runner_c_req = MigrationRunner(harness_unavailable, require_vector=True)
+        with self.assertRaises(TigerExtensionError):
+            runner_c_req.verify_extensions()
+
+        # Case D: TimescaleDB / pgvectorscale capability semantics
+        harness_d = DeterministicPostgresHarness(
+            vector_installed=True,
+            timescaledb_installed=False,
+            timescaledb_available=True,
+            vectorscale_installed=False,
+            vectorscale_available=True,
+        )
+        report_d = ExtensionInspector(harness_d).inspect()
+        self.assertFalse(report_d.has_timescaledb)
+        self.assertTrue(report_d.timescaledb_available)
+        self.assertFalse(report_d.has_vectorscale)
+        self.assertTrue(report_d.vectorscale_available)
 
     # -------------------------------------------------------------------------
     # 9. Memory lane tables exist with required columns and types
     # -------------------------------------------------------------------------
     def test_memory_lane_tables_exist_with_required_columns(self) -> None:
         """9. code_chunks and repo_file_index contain all domain and vector/FTS columns."""
-        harness = DeterministicPostgresHarness()
+        harness = DeterministicPostgresHarness(vector_installed=True)
         runner = MigrationRunner(harness)
         runner.apply_all()
 
@@ -430,16 +540,25 @@ class TestTigerSchemaAndConnection(unittest.TestCase):
         self.assertIn("is_fresh", rf_cols)
 
     # -------------------------------------------------------------------------
-    # 10. Vector column/index semantics are verified
+    # 10. Vector column/index semantics are verified (DECISION-61b6c150)
     # -------------------------------------------------------------------------
     def test_vector_column_semantics(self) -> None:
-        """10. code_chunks includes vector(1536) embedding column."""
-        harness = DeterministicPostgresHarness(has_vector=True)
+        """10. code_chunks includes unconstrained vector column; vector index and dimension deferred to W2."""
+        harness = DeterministicPostgresHarness(vector_installed=True)
         runner = MigrationRunner(harness)
         runner.apply_all()
 
         col_def = harness.tables["code_chunks"]["columns"]["embedding"]
-        self.assertIn("vector(1536)", col_def.lower())
+        # Column is unconstrained vector; must NOT have fixed dimension like vector(1536)
+        self.assertEqual("vector", col_def.lower().strip())
+        self.assertNotIn("vector(1536)", col_def.lower())
+        self.assertNotIn("vector(128)", col_def.lower())
+
+        # Verify NO vector index (HNSW or DiskANN) exists in W1-05 schema
+        self.assertNotIn("idx_code_chunks_embedding", harness.indexes)
+        for idx_name, idx_info in harness.indexes.items():
+            self.assertNotIn("using hnsw", idx_info["sql"].lower())
+            self.assertNotIn("using diskann", idx_info["sql"].lower())
 
     # -------------------------------------------------------------------------
     # 11. Full-text search column/index semantics are verified
@@ -629,13 +748,23 @@ class TestTigerSchemaAndConnection(unittest.TestCase):
         self.assertFalse(mgr.check_health())
 
     # -------------------------------------------------------------------------
-    # 20. Live PostgreSQL integration test when available (skipped if unavailable)
+    # 20. Live PostgreSQL / Tiger Cloud integration test (requires TIGER_DATABASE_URL)
     # -------------------------------------------------------------------------
     def test_live_postgresql_integration_when_available(self) -> None:
-        """20. Validates schema against a real PostgreSQL instance when TIGER_DATABASE_URL is provided."""
+        """20. Validates schema against live Tiger Cloud / PostgreSQL when TIGER_DATABASE_URL is provided.
+
+        Honesty invariant:
+        Deterministic in-memory tests (1-19) prove schema SQL syntax, constraint definitions,
+        tamper detection, and migration idempotency on a simulated catalog. They do NOT constitute
+        proof of live Tiger Cloud infrastructure behavior. Real infrastructure validation
+        strictly requires TIGER_DATABASE_URL and will skip with an explicit message if unset.
+        """
         live_url = os.environ.get("TIGER_DATABASE_URL", "").strip()
         if not live_url:
-            self.skipTest("Live PostgreSQL daemon not configured via TIGER_DATABASE_URL; skipping real network test.")
+            self.skipTest(
+                "Live Tiger Cloud / PostgreSQL infrastructure validation requires TIGER_DATABASE_URL. "
+                "Deterministic harness validates catalog contracts only; skipping real network test."
+            )
 
         try:
             import psycopg  # type: ignore[import-untyped]

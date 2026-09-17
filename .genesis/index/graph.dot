@@ -24,8 +24,6 @@ digraph genesis {
   "file:pr_review_agent/worker.py" [label="pr_review_agent/worker.py",class="file"];
   "file:scratch/analyze_genesis.py" [label="scratch/analyze_genesis.py",class="file"];
   "file:scratch/dump_forensic_report.py" [label="scratch/dump_forensic_report.py",class="file"];
-  "file:scratch/inspect_genesis_tasks.py" [label="scratch/inspect_genesis_tasks.py",class="file"];
-  "file:scratch/print_decisions.py" [label="scratch/print_decisions.py",class="file"];
   "file:scratch/query_case5.py" [label="scratch/query_case5.py",class="file"];
   "file:scripts/evaluate_golden_live.py" [label="scripts/evaluate_golden_live.py",class="file"];
   "file:scripts/evaluate_golden.py" [label="scripts/evaluate_golden.py",class="file"];

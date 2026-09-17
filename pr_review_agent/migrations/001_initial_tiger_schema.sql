@@ -39,7 +39,11 @@ CREATE TABLE IF NOT EXISTS code_chunks (
     content TEXT NOT NULL,
     content_hash VARCHAR(64) NOT NULL,
     token_count INTEGER,
-    embedding vector(1536),
+    -- Unconstrained vector column: concrete production embedding model, fixed dimension,
+    -- and vector indexing strategy (e.g. DiskANN via pgvectorscale) are explicitly
+    -- deferred to Wave 2 per DECISION-61b6c150. No fixed dimension or vector index
+    -- is created in W1-05.
+    embedding vector,
     tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
     index_version VARCHAR(32) NOT NULL DEFAULT 'v1',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -20,7 +20,7 @@ import os
 import re
 from types import TracebackType
 from typing import Any, Protocol, runtime_checkable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from pr_review_agent.security import (
     RuntimeSecretRegistry,
@@ -29,6 +29,8 @@ from pr_review_agent.security import (
 )
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_SSL_MODES: frozenset[str] = frozenset({"require", "verify-ca", "verify-full"})
 
 
 class TigerError(Exception):
@@ -72,6 +74,16 @@ class TigerConfig:
     min_pool_size: int = 1
     max_pool_size: int = 10
 
+    def __post_init__(self) -> None:
+        if self.ssl_mode == "disable":
+            raise TigerConfigurationError(
+                "sslmode=disable is prohibited for Tiger Cloud / Postgres backend. Connection must fail closed."
+            )
+        if self.ssl_mode not in ALLOWED_SSL_MODES:
+            raise TigerConfigurationError(
+                f"Invalid SSL mode '{self.ssl_mode}'. Accepted modes are: {', '.join(sorted(ALLOWED_SSL_MODES))}."
+            )
+
     def __repr__(self) -> str:
         masked_url = mask_database_url(self.database_url)
         masked_pwd = "***" if self.password else ""
@@ -95,7 +107,7 @@ class TigerConfig:
     ) -> TigerConfig:
         """Parse and validate a Tiger / Postgres connection URL.
 
-        Fails closed on missing host or malformed URL.
+        Fails closed on missing host, malformed URL, sslmode=disable, or unaccepted ssl mode.
         Registers the password in the secret registry if provided.
         """
         raw_url = database_url.strip()
@@ -118,20 +130,43 @@ class TigerConfig:
         user = parsed.username or "postgres"
         password = parsed.password or ""
 
-        # Extract sslmode from query parameters if present
+        # Extract and validate sslmode from query parameters or default
         query_params = parse_qs(parsed.query)
-        ssl_mode = default_ssl_mode
+        ssl_mode = default_ssl_mode.strip().lower()
         if "sslmode" in query_params:
             ssl_mode = query_params["sslmode"][0].strip().lower()
         elif "ssl" in query_params:
             val = query_params["ssl"][0].strip().lower()
             ssl_mode = "require" if val in ("1", "true", "require") else "disable"
 
+        if ssl_mode == "disable":
+            raise TigerConfigurationError(
+                "sslmode=disable is prohibited for Tiger Cloud / Postgres backend. Connection must fail closed."
+            )
+        if ssl_mode not in ALLOWED_SSL_MODES:
+            raise TigerConfigurationError(
+                f"Invalid SSL mode '{ssl_mode}'. Accepted modes are: {', '.join(sorted(ALLOWED_SSL_MODES))}."
+            )
+
+        # Construct sanitized URL ensuring sslmode parameter is explicitly present and matches validated ssl_mode
+        qp = {k: list(v) for k, v in query_params.items()}
+        qp["sslmode"] = [ssl_mode]
+        qp.pop("ssl", None)
+        sanitized_query = urlencode([(k, v) for k, vs in qp.items() for v in vs])
+        sanitized_url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            sanitized_query,
+            parsed.fragment,
+        ))
+
         if secret_registry and password:
             secret_registry.register_secret(SecretType.TIGERDB_CREDENTIAL, password)
 
         return cls(
-            database_url=raw_url,
+            database_url=sanitized_url,
             host=host,
             port=port,
             database=database,
@@ -154,8 +189,7 @@ class TigerConfig:
         """Load TigerConfig from environment mapping.
 
         Looks for TIGER_DATABASE_URL or TIGER_URL.
-        If require_url is False and URL is missing, returns None.
-        If require_url is True and URL is missing, raises TigerConfigurationError.
+        Fails closed on missing required URL, sslmode=disable, or unaccepted ssl mode.
         """
         env_map = env if env is not None else os.environ
         url = (
@@ -172,6 +206,15 @@ class TigerConfig:
             return None
 
         ssl_mode = env_map.get("TIGER_SSL_MODE", "require").strip().lower()
+        if ssl_mode == "disable":
+            raise TigerConfigurationError(
+                "sslmode=disable is prohibited for Tiger Cloud / Postgres backend. Connection must fail closed."
+            )
+        if ssl_mode not in ALLOWED_SSL_MODES:
+            raise TigerConfigurationError(
+                f"Invalid SSL mode '{ssl_mode}'. Accepted modes are: {', '.join(sorted(ALLOWED_SSL_MODES))}."
+            )
+
         min_pool = int(env_map.get("TIGER_MIN_POOL_SIZE", "1").strip())
         max_pool = int(env_map.get("TIGER_MAX_POOL_SIZE", "10").strip())
         timeout = float(env_map.get("TIGER_CONNECT_TIMEOUT", "10.0").strip())
@@ -241,6 +284,7 @@ class TigerConnectionManager(AbstractContextManager, AbstractAsyncContextManager
             import psycopg  # type: ignore[import-untyped]
             return psycopg.connect(
                 self.config.database_url,
+                sslmode=self.config.ssl_mode,
                 connect_timeout=self.config.connect_timeout_seconds,
             )
         except ImportError:
