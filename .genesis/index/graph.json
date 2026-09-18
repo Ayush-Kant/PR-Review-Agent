@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "8ef2c998ffca93123e81e9ad845c10a042163117",
-  "sourceHash": "dfdaf1e9664ae72d2c4646b374164593478eb0004b7fe26fd8746ae121c8c8d3",
+  "revision": "d5bf97252656ec7d3645475fb367cc927dd36dd3",
+  "sourceHash": "8f22ea231fadce5ecec52ab2c46ee64fc531578bdc49ef77e48413042442b95d",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -260,6 +260,16 @@
       "contentHash": "e27f5352dae4b2418c55d369430ca916533aca132cfd3764c5e6d1a01532a0a2"
     },
     {
+      "id": "file:scripts/validate_redis_gate1.py",
+      "type": "file",
+      "label": "scripts/validate_redis_gate1.py",
+      "path": "scripts/validate_redis_gate1.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "943f9c53279fd3d41dc86ccfc9f843932e7dc13cc135ec8f06df556a491210f6"
+    },
+    {
       "id": "file:tests/test_audit_observability_dashboard.py",
       "type": "file",
       "label": "tests/test_audit_observability_dashboard.py",
@@ -448,6 +458,16 @@
       "confidence": 1,
       "extractor": "filesystem",
       "contentHash": "4230a64696bcf093a599c7a8edebf1226e6053912e32381c206774ca13773b3a"
+    },
+    {
+      "id": "file:tests/test_validate_redis_gate1.py",
+      "type": "file",
+      "label": "tests/test_validate_redis_gate1.py",
+      "path": "tests/test_validate_redis_gate1.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "4ac58bd0c0e2a039eb93e41007e6c7ea94fe7cda685697e28a8754bf8d56a39a"
     },
     {
       "id": "file:tests/test_webhook_intake.py",

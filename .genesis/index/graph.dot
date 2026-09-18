@@ -26,6 +26,7 @@ digraph genesis {
   "file:scripts/evaluate_golden_live.py" [label="scripts/evaluate_golden_live.py",class="file"];
   "file:scripts/evaluate_golden.py" [label="scripts/evaluate_golden.py",class="file"];
   "file:scripts/live_pr_review.py" [label="scripts/live_pr_review.py",class="file"];
+  "file:scripts/validate_redis_gate1.py" [label="scripts/validate_redis_gate1.py",class="file"];
   "file:tests/test_audit_observability_dashboard.py" [label="tests/test_audit_observability_dashboard.py",class="file"];
   "file:tests/test_cost_and_budget_controls.py" [label="tests/test_cost_and_budget_controls.py",class="file"];
   "file:tests/test_end_to_end_replay.py" [label="tests/test_end_to_end_replay.py",class="file"];
@@ -45,6 +46,7 @@ digraph genesis {
   "file:tests/test_security_boundaries.py" [label="tests/test_security_boundaries.py",class="file"];
   "file:tests/test_tiger_data_adapters.py" [label="tests/test_tiger_data_adapters.py",class="file"];
   "file:tests/test_tiger_schema_and_connection.py" [label="tests/test_tiger_schema_and_connection.py",class="file"];
+  "file:tests/test_validate_redis_gate1.py" [label="tests/test_validate_redis_gate1.py",class="file"];
   "file:tests/test_webhook_intake.py" [label="tests/test_webhook_intake.py",class="file"];
 
 }
