@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "17c61df60cc301058521534ee145ec8a7d7708b9",
+  "revision": "c3cb75dbf66057b0719fbf278033c3ceed223d9a",
   "sourceHash": "493360ec7ed7f2699ee1c56638a24cc7ad623116c56f60494e3785710f445f2d",
   "provenance": {
     "tool": "genesis-graphizer",

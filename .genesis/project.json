@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-19T10:29:21.315Z"
+    "updated_at": "2026-09-19T16:57:36.496Z"
   },
   "policy": {
     "ponytail": "full",
@@ -23,11 +23,11 @@
     }
   },
   "lifecycle": {
-    "phase": "build",
-    "status": "active",
-    "active_task": "production-infrastructure-cutover",
+    "phase": "verify",
+    "status": "ready",
+    "active_task": null,
     "blocker": null,
-    "next_action": "Run the task pre-flight."
+    "next_action": "Review completed work and choose the next bounded outcome."
   },
   "commands": {},
   "workflow": {
@@ -2538,7 +2538,7 @@
     {
       "id": "production-infrastructure-cutover",
       "outcome": "Live staging validation, semantic parity proof, controlled promotion preparation, and rollback proof for the existing Redis/Tiger production composition",
-      "state": "active",
+      "state": "done",
       "risk": "low",
       "owner": null,
       "scope": [],
@@ -2562,8 +2562,14 @@
           "kind": "command",
           "command": "python -m pytest tests/test_production_runtime_composition.py",
           "mandatory": true,
-          "status": "pending",
-          "evidence": null
+          "status": "pass",
+          "evidence": {
+            "path": ".genesis/evidence/production-infrastructure-cutover-test-facb6a53-ebf2-454a-8b20-502a379829da.json",
+            "hash": "cc4397a112d5cfcd446be041b961038ebca1704aa20cf63a712bc48e33a1140e",
+            "source_hash": "0e021314d9f9cc1a1e4cc003dd2f8d8c5711c8500577765254e4956901197cb2",
+            "config_hash": "181c6e678aea91e555261555ca819b7fa8be7f42b4d9627db681af21f142fe13",
+            "observed_at": "2026-09-19T16:56:18.471Z"
+          }
         }
       ],
       "next_action": "Run the task pre-flight.",
@@ -2572,7 +2578,7 @@
       "failures": [],
       "limitations": [],
       "created_at": "2026-09-17T23:52:58.107Z",
-      "updated_at": "2026-09-17T23:52:58.109Z",
+      "updated_at": "2026-09-19T16:56:54.920Z",
       "base_manifest": {
         ".gitignore": "dc961659055b943bf2425da012d0fece8f2543d58d0e5936573a91e1c0455f15",
         "AGENTS.md": "a67615d8ed1ed3dd1b0d2cbf874ceb8d4a285c3335cdfc2d785ec80a06daecc1",
@@ -4274,6 +4280,30 @@
       "cost": null,
       "stop_reason": null,
       "ended_at": "2026-09-17T23:43:17.923Z"
+    },
+    {
+      "id": "facb6a53-ebf2-454a-8b20-502a379829da",
+      "task": "production-infrastructure-cutover",
+      "kind": "gate",
+      "command": "python -m pytest tests/test_production_runtime_composition.py",
+      "timeout": 120000,
+      "authorization": null,
+      "pid": 14504,
+      "child_pid": 26920,
+      "started_at": "2026-09-19T16:55:42.374Z",
+      "status": "passed",
+      "before_hash": "0e021314d9f9cc1a1e4cc003dd2f8d8c5711c8500577765254e4956901197cb2",
+      "config_hash": "181c6e678aea91e555261555ca819b7fa8be7f42b4d9627db681af21f142fe13",
+      "environment": {
+        "node": "v22.16.0",
+        "platform": "win32",
+        "arch": "x64",
+        "verifier": "0ce134f3cdca43b322c92040c7b30c596ee1ce21aef2c9c4ba62d0daf07f38a3",
+        "variables": {}
+      },
+      "cost": null,
+      "stop_reason": null,
+      "ended_at": "2026-09-19T16:56:18.471Z"
     }
   ],
   "authorizations": [],
@@ -4281,14 +4311,14 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-19T10:29:21.081Z",
+    "at": "2026-09-19T16:57:36.190Z",
     "revision": {
-      "commit": "17c61df60cc301058521534ee145ec8a7d7708b9",
+      "commit": "c3cb75dbf66057b0719fbf278033c3ceed223d9a",
       "dirty": true,
       "source_hash": "0e021314d9f9cc1a1e4cc003dd2f8d8c5711c8500577765254e4956901197cb2"
     },
-    "active_task": "production-infrastructure-cutover",
-    "next_action": "Run the task pre-flight."
+    "active_task": null,
+    "next_action": "Review completed work and choose the next bounded outcome."
   },
   "legacy": null
 }
