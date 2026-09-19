@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "project": "PR-Review-Agent",
-  "revision": "d5bf97252656ec7d3645475fb367cc927dd36dd3",
-  "sourceHash": "8f22ea231fadce5ecec52ab2c46ee64fc531578bdc49ef77e48413042442b95d",
+  "revision": "17c61df60cc301058521534ee145ec8a7d7708b9",
+  "sourceHash": "493360ec7ed7f2699ee1c56638a24cc7ad623116c56f60494e3785710f445f2d",
   "provenance": {
     "tool": "genesis-graphizer",
     "method": "static-analysis",
@@ -267,7 +267,17 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "943f9c53279fd3d41dc86ccfc9f843932e7dc13cc135ec8f06df556a491210f6"
+      "contentHash": "0b5b067257b92b47595541679bdb5060e9220b29a618533cefc8e3a2801805df"
+    },
+    {
+      "id": "file:scripts/validate_tiger_gate2.py",
+      "type": "file",
+      "label": "scripts/validate_tiger_gate2.py",
+      "path": "scripts/validate_tiger_gate2.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "3ace46bc60b6020ee03dff19f0e4650ea4f41bcb5506be83e3c914fd2ef375f0"
     },
     {
       "id": "file:tests/test_audit_observability_dashboard.py",
@@ -467,7 +477,17 @@
       "language": "python",
       "confidence": 1,
       "extractor": "filesystem",
-      "contentHash": "4ac58bd0c0e2a039eb93e41007e6c7ea94fe7cda685697e28a8754bf8d56a39a"
+      "contentHash": "9a76ea5941278a21305e4cecd349f052713ba6ccef4397df6c2bfa8e609fcf6c"
+    },
+    {
+      "id": "file:tests/test_validate_tiger_gate2.py",
+      "type": "file",
+      "label": "tests/test_validate_tiger_gate2.py",
+      "path": "tests/test_validate_tiger_gate2.py",
+      "language": "python",
+      "confidence": 1,
+      "extractor": "filesystem",
+      "contentHash": "4e240a7e6c1ba91496f153b9c441c23a19d1fef2c946d623eadcc63f649e1bae"
     },
     {
       "id": "file:tests/test_webhook_intake.py",

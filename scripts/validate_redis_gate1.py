@@ -136,9 +136,12 @@ class ValidationReport:
     checks: dict[str, dict[str, Any]]
     evidence_path: str | None
     failure_details: str | None = None
+    capabilities: dict[str, Any] | None = None
+    environmental_context: str | None = None
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(asdict(self), indent=indent)
+
 
 
 class RedisGate1Validator:
@@ -194,6 +197,7 @@ class RedisGate1Validator:
         first_failure: str | None = None
 
         if self.client is None:
+            capabilities = self.evaluate_capabilities({}, is_offline=True)
             report = ValidationReport(
                 task="production-infrastructure-cutover",
                 gate="gate-1-real-redis-validation",
@@ -208,6 +212,8 @@ class RedisGate1Validator:
                 checks={},
                 evidence_path=str(self.evidence_path),
                 failure_details="No REDIS_URL provided and no client injected. Real Redis validation was not executed.",
+                capabilities=capabilities,
+                environmental_context="No Redis environment provided.",
             )
             self._save_report(report)
             return report
@@ -248,6 +254,18 @@ class RedisGate1Validator:
         else:
             overall_status = "failed"
 
+        capabilities = self.evaluate_capabilities(checks, is_offline=is_offline)
+        env_context = (
+            "Current free-tier Redis environment provides redis:// without TLS termination. "
+            "Real Redis functional behavior is proven; infrastructure capabilities (TLS, HA, scale, backups, "
+            "private networking) remain deferred/unproven and are preserved as future validation targets."
+            if not is_offline and not self.metadata.get("tls")
+            else (
+                "TLS-capable Redis endpoint verified." if self.metadata.get("tls") and not is_offline
+                else "Offline mock verification."
+            )
+        )
+
         report = ValidationReport(
             task="production-infrastructure-cutover",
             gate="gate-1-real-redis-validation",
@@ -262,10 +280,126 @@ class RedisGate1Validator:
             checks={k: asdict(v) for k, v in checks.items()},
             evidence_path=str(self.evidence_path),
             failure_details=first_failure,
+            capabilities=capabilities,
+            environmental_context=env_context,
         )
 
         self._save_report(report)
         return report
+
+    def evaluate_capabilities(
+        self,
+        checks: dict[str, CheckResult],
+        *,
+        is_offline: bool,
+    ) -> dict[str, Any]:
+        """Evaluate explicit capability dimensions from check results and environment state.
+
+        Distinguishes:
+        - PROVEN against real live Redis execution
+        - OFFLINE_VERIFIED in mock/test harnesses (never claimed as live infrastructure proof)
+        - NOT_PROVEN / DEFERRED due to environmental limitations (e.g. lack of TLS on free tier)
+        - NOT_BENCHMARKED (e.g. production capacity limits)
+        """
+        def _check_passed(name: str) -> bool:
+            return checks.get(name) is not None and checks[name].status == "passed"
+
+        # 1. Functional Semantics
+        if not is_offline and _check_passed("queue_lifecycle"):
+            q_status, q_verdict = "PROVEN", "pass"
+            q_notes = "Queue lifecycle, atomic leasing, retry schedule, dead-letter routing, and zombie recovery proven against real Redis."
+        elif is_offline and _check_passed("queue_lifecycle"):
+            q_status, q_verdict = "OFFLINE_VERIFIED", "pass"
+            q_notes = "Queue lifecycle verified in offline mock harness only; not proven against live infrastructure."
+        else:
+            q_status, q_verdict = "NOT_PROVEN", "fail"
+            q_notes = "Queue lifecycle check did not pass."
+
+        # 2. Native Lua Execution
+        if not is_offline and _check_passed("lua_engine"):
+            lua_status, lua_verdict = "PROVEN", "pass"
+            lua_notes = "CLAIM_JOB_LUA and ENQUEUE_JOB_LUA executed natively in real Redis engine with atomic concurrency limits."
+        elif is_offline and _check_passed("lua_engine"):
+            lua_status, lua_verdict = "OFFLINE_VERIFIED", "pass"
+            lua_notes = "Lua execution verified in offline mock harness only; not proven against live infrastructure."
+        else:
+            lua_status, lua_verdict = "NOT_PROVEN", "fail"
+            lua_notes = "Lua engine check did not pass."
+
+        # 3. Checkpoint Semantics
+        if not is_offline and _check_passed("checkpoint"):
+            cp_status, cp_verdict = "PROVEN", "pass"
+            cp_notes = "LangGraph BaseCheckpointSaver protocol, exact state round-trip, thread isolation, forbidden secret rejection, and thread deletion proven against real Redis."
+        elif is_offline and _check_passed("checkpoint"):
+            cp_status, cp_verdict = "OFFLINE_VERIFIED", "pass"
+            cp_notes = "Checkpoint semantics verified in offline mock harness only; not proven against live infrastructure."
+        else:
+            cp_status, cp_verdict = "NOT_PROVEN", "fail"
+            cp_notes = "Checkpoint check did not pass."
+
+        # 4. ARQ Serialization Compatibility
+        if not is_offline and _check_passed("arq_serialization"):
+            arq_status, arq_verdict = "PROVEN", "pass"
+            arq_notes = "review_job_task payload serialized with installed ARQ and round-trip deserialized."
+        elif is_offline and _check_passed("arq_serialization"):
+            arq_status, arq_verdict = "OFFLINE_VERIFIED", "pass"
+            arq_notes = "ARQ serialization verified in offline mock harness only; not proven against live infrastructure."
+        else:
+            arq_status, arq_verdict = "NOT_PROVEN", "fail"
+            arq_notes = "ARQ serialization check did not pass."
+
+        # 5. Secret Handling
+        if not is_offline and _check_passed("secret_redaction") and _check_passed("authentication"):
+            sec_status, sec_verdict = "PROVEN", "pass"
+            sec_notes = "Complete credential masking verified in URLs, metadata representations, and keyspace."
+        elif is_offline and _check_passed("secret_redaction"):
+            sec_status, sec_verdict = "OFFLINE_VERIFIED", "pass"
+            sec_notes = "Secret redaction verified in offline mock harness."
+        else:
+            sec_status, sec_verdict = "NOT_PROVEN", "fail"
+            sec_notes = "Secret redaction check did not pass."
+
+        # 6. TLS Transport
+        is_tls = self.metadata.get("tls", False)
+        if not is_offline and is_tls and _check_passed("connectivity"):
+            tls_status, tls_verdict = "PROVEN", "pass"
+            tls_notes = "Real Redis TLS transport (rediss://) verified with encrypted transport."
+        else:
+            tls_status, tls_verdict = "NOT_PROVEN", "deferred"
+            tls_notes = (
+                "TLS transport is unavailable on the current free-tier Redis endpoint (uses redis://). "
+                "Deferred until TLS-capable (rediss://) infrastructure is configured."
+            )
+
+        # 7. HA / Failover
+        ha_status, ha_verdict = "NOT_PROVEN", "deferred"
+        ha_notes = "Current free-tier Redis is a single standalone node. Multi-node Sentinel/Cluster failover remains deferred."
+
+        # 8. Production-Scale Capacity
+        cap_status, cap_verdict = "NOT_BENCHMARKED", "deferred"
+        cap_notes = "Free-tier Redis instance has connection/bandwidth quotas unsuitable for load testing. Capacity benchmarking deferred."
+
+        # 9. Managed Production Backups & Recovery
+        bak_status, bak_verdict = "NOT_PROVEN", "deferred"
+        bak_notes = "Automated snapshot/RDB/AOF point-in-time recovery is not provided by free-tier instance. Managed recovery deferred."
+
+        # 10. Private Production Networking
+        net_status, net_verdict = "NOT_PROVEN", "deferred"
+        net_notes = "Current free-tier Redis operates on public internet with authentication; VPC peering / private network isolation deferred."
+
+        return {
+            "redis_functional_semantics": {"status": q_status, "verdict": q_verdict, "evidence": q_notes},
+            "redis_native_lua_execution": {"status": lua_status, "verdict": lua_verdict, "evidence": lua_notes},
+            "redis_checkpoint_semantics": {"status": cp_status, "verdict": cp_verdict, "evidence": cp_notes},
+            "redis_arq_serialization_compatibility": {"status": arq_status, "verdict": arq_verdict, "evidence": arq_notes},
+            "redis_secret_handling": {"status": sec_status, "verdict": sec_verdict, "evidence": sec_notes},
+            "redis_tls_transport": {"status": tls_status, "verdict": tls_verdict, "reason": tls_notes, "future_target": "rediss:// URL on TLS-capable Redis endpoint"},
+            "redis_ha_failover": {"status": ha_status, "verdict": ha_verdict, "reason": ha_notes, "future_target": "Multi-node Redis Sentinel or Cluster deployment"},
+            "production_scale_capacity": {"status": cap_status, "verdict": cap_verdict, "reason": cap_notes, "future_target": "Benchmarked dedicated production Redis tier"},
+            "managed_production_backups_recovery": {"status": bak_status, "verdict": bak_verdict, "reason": bak_notes, "future_target": "Automated snapshot/PITR persistence on managed cloud Redis"},
+            "private_production_networking": {"status": net_status, "verdict": net_verdict, "reason": net_notes, "future_target": "VPC peering / AWS PrivateLink / GCP Private Service Connect"},
+        }
+
 
     def _save_report(self, report: ValidationReport) -> None:
         """Persist validation report to disk while strictly redacting secrets."""
@@ -1088,6 +1222,12 @@ def main() -> int:
             print(f"  {status_symbol} {name:<20}: {res['status']} ({res['duration_ms']:.1f}ms)")
             if res.get("error"):
                 print(f"      Error: {res['error']}")
+        if report.capabilities:
+            print("\nCapabilities Breakdown:")
+            for cap_name, cap_info in report.capabilities.items():
+                stat = cap_info.get("status", "UNKNOWN")
+                symbol = "✓" if stat in ("PROVEN", "OFFLINE_VERIFIED") else ("⏸" if "DEFERRED" in str(cap_info.get("verdict", "")).upper() or stat == "NOT_BENCHMARKED" else "✗")
+                print(f"  {symbol} {cap_name:<40}: {stat} (verdict: {cap_info.get('verdict', 'unknown')})")
         print("====================================================\n")
 
     return 0 if report.overall_status in ("passed", "offline_verified") else 1

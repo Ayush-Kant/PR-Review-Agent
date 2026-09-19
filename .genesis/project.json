@@ -9,7 +9,7 @@
     "non_goals": [],
     "trust_boundary": "local repository",
     "created_at": "2026-09-14T14:19:56.390Z",
-    "updated_at": "2026-09-18T13:32:45.512Z"
+    "updated_at": "2026-09-19T10:29:21.315Z"
   },
   "policy": {
     "ponytail": "full",
@@ -317,6 +317,16 @@
       "status": "accepted",
       "source": null,
       "recorded_at": "2026-09-17T13:24:40.364Z",
+      "paths": [],
+      "tags": []
+    },
+    {
+      "id": "DECISION-d7a516e4",
+      "title": "W1-08B Capability-Based Infrastructure Evidence and Modular Transport Model",
+      "text": "Under free-tier infrastructure constraints, infrastructure validation for W1-08B is represented through an explicit capability-based evidence model. Functional Redis capabilities (queue lifecycle, native Lua atomicity, checkpoint persistence and thread isolation, ARQ serialization, and secret redaction) demonstrated against live real Redis are proven. Environmental capabilities unavailable on the free-tier endpoint (TLS transport, HA/failover, production scale, managed backups, and private networking) remain explicitly deferred and unproven. The Gate-1 TLS safety invariant is strictly preserved: official staging gate approval continues to mandate rediss:// and is not weakened. The modular production path is configuration-driven via REDIS_URL without changes to application business logic, queue semantics, or checkpoint architecture.",
+      "status": "accepted",
+      "source": "W1-08B Continuation, 2026-09-19",
+      "recorded_at": "2026-09-19T10:19:53.694Z",
       "paths": [],
       "tags": []
     }
@@ -4271,11 +4281,11 @@
   "incidents": [],
   "discovery": null,
   "checkpoint": {
-    "at": "2026-09-18T13:32:45.213Z",
+    "at": "2026-09-19T10:29:21.081Z",
     "revision": {
-      "commit": "d5bf97252656ec7d3645475fb367cc927dd36dd3",
+      "commit": "17c61df60cc301058521534ee145ec8a7d7708b9",
       "dirty": true,
-      "source_hash": "1aa7784ae50fa5225f5ed6457306f0dfba84467f815a397b3bc9a5e10a1d0a67"
+      "source_hash": "0e021314d9f9cc1a1e4cc003dd2f8d8c5711c8500577765254e4956901197cb2"
     },
     "active_task": "production-infrastructure-cutover",
     "next_action": "Run the task pre-flight."

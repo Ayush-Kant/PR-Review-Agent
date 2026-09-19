@@ -1,23 +1,190 @@
 {
   "task": "production-infrastructure-cutover",
   "gate": "gate-1-real-redis-validation",
-  "overall_status": "not_executed",
-  "live_redis_executed": false,
-  "timestamp": "2026-09-18T12:17:59.156025+00:00",
+  "overall_status": "failed",
+  "live_redis_executed": true,
+  "timestamp": "2026-09-18T18:28:10.821280+00:00",
   "repository": "Ayush-Kant/PR-Review-Agent",
   "branch": "agent-v1",
   "commit_sha": "d5bf97252656ec7d3645475fb367cc927dd36dd3",
   "redis_metadata": {
-    "scheme": "unknown",
-    "host": "unknown",
-    "port": 0,
+    "scheme": "redis",
+    "host": "treatment-fuel-wool-75256.db.redis.io",
+    "port": 13859,
     "db": 0,
     "tls": false,
-    "authenticated": false,
-    "masked_url": ""
+    "authenticated": true,
+    "masked_url": "redis://default:***@treatment-fuel-wool-75256.db.redis.io:13859"
   },
-  "server_version": null,
-  "checks": {},
+  "server_version": "8.6.2",
+  "checks": {
+    "connectivity": {
+      "name": "connectivity",
+      "status": "failed",
+      "duration_ms": 2293.9555000000382,
+      "details": {
+        "ping_received": true,
+        "redis_version": "8.6.2",
+        "tls_configured": false
+      },
+      "error": "Staging Redis URL does not use TLS (rediss://). Pass allow_insecure=True only for local mock tests."
+    },
+    "authentication": {
+      "name": "authentication",
+      "status": "passed",
+      "duration_ms": 635.4033000000072,
+      "details": {
+        "auth_present_in_url": true,
+        "invalid_auth_failed_closed": true,
+        "auth_error_type": "AuthenticationError"
+      },
+      "error": null
+    },
+    "lua_engine": {
+      "name": "lua_engine",
+      "status": "passed",
+      "duration_ms": 1735.3629000001547,
+      "details": {
+        "lua_path_proven": true,
+        "python_fallback_used": false,
+        "enqueue_lua_ok": true,
+        "enqueue_lua_dedupe_proven": true,
+        "claim_lua_ok": true,
+        "claim_lua_state_verified": true,
+        "claim_lua_concurrency_proven": true
+      },
+      "error": null
+    },
+    "queue_lifecycle": {
+      "name": "queue_lifecycle",
+      "status": "passed",
+      "duration_ms": 12984.919999999875,
+      "details": {
+        "job1_enqueued": "job-gate1-q-del1-da8fa95a",
+        "enqueue_dedupe_verified": true,
+        "lease1_verified": true,
+        "concurrency_limit_verified": true,
+        "backoff_schedule_verified": true,
+        "dead_letter_verified": true,
+        "zombie_recovery_verified": true
+      },
+      "error": null
+    },
+    "arq_serialization": {
+      "name": "arq_serialization",
+      "status": "passed",
+      "duration_ms": 458.27280000003157,
+      "details": {
+        "arq_function": "review_job_task",
+        "job_id_round_trip": true,
+        "enqueue_time_ms": null
+      },
+      "error": null
+    },
+    "checkpoint": {
+      "name": "checkpoint",
+      "status": "passed",
+      "duration_ms": 3116.0412000001543,
+      "details": {
+        "checkpoint_put_ok": true,
+        "checkpoint_get_exact_match": true,
+        "thread_isolation_verified": true,
+        "forbidden_secrets_rejected": true,
+        "delete_thread_verified": true
+      },
+      "error": null
+    },
+    "secret_redaction": {
+      "name": "secret_redaction",
+      "status": "passed",
+      "duration_ms": 0.06359999997584964,
+      "details": {
+        "masked_url_clean": true,
+        "keys_clean": true
+      },
+      "error": null
+    },
+    "cleanup": {
+      "name": "cleanup",
+      "status": "passed",
+      "duration_ms": 9313.454699999966,
+      "details": {
+        "keys_deleted": 13,
+        "clean_completed": true
+      },
+      "error": null
+    }
+  },
   "evidence_path": ".genesis\\evidence\\w1_08b_redis_validation.json",
-  "failure_details": "No REDIS_URL provided and no client injected. Real Redis validation was not executed."
+  "failure_details": "connectivity: Staging Redis URL does not use TLS (rediss://). Pass allow_insecure=True only for local mock tests.",
+  "environmental_context": "Current free-tier Redis environment provides redis:// without TLS termination. Real Redis functional behavior is proven; infrastructure capabilities (TLS, HA, scale, backups, private networking) remain deferred/unproven and are preserved as future validation targets.",
+  "capabilities": {
+    "redis_functional_semantics": {
+      "status": "PROVEN",
+      "verdict": "pass",
+      "evidence": "Queue lifecycle, atomic leasing, retry schedule, dead-letter routing, and zombie recovery proven against real Redis instance (server version 8.6.2 at treatment-fuel-wool-75256.db.redis.io:13859)."
+    },
+    "redis_native_lua_execution": {
+      "status": "PROVEN",
+      "verdict": "pass",
+      "evidence": "CLAIM_JOB_LUA and ENQUEUE_JOB_LUA executed natively in real Redis engine with atomic concurrency limits and deduplication."
+    },
+    "redis_checkpoint_semantics": {
+      "status": "PROVEN",
+      "verdict": "pass",
+      "evidence": "LangGraph BaseCheckpointSaver protocol, exact state round-trip, thread isolation, forbidden secret rejection, and thread deletion proven against real Redis."
+    },
+    "redis_arq_serialization_compatibility": {
+      "status": "PROVEN",
+      "verdict": "pass",
+      "evidence": "review_job_task payload serialized with installed ARQ 0.28.0 and round-trip deserialized."
+    },
+    "redis_secret_handling": {
+      "status": "PROVEN",
+      "verdict": "pass",
+      "evidence": "Complete credential masking verified in URLs, metadata representations, and keyspace."
+    },
+    "redis_tls_transport": {
+      "status": "NOT_PROVEN",
+      "verdict": "deferred",
+      "reason": "Current free-tier Redis environment provides redis:// rather than rediss://. TLS transport is unavailable on this free-tier provider endpoint.",
+      "future_target": "Validate rediss:// transport against TLS-capable staging/production Redis endpoint."
+    },
+    "redis_ha_failover": {
+      "status": "NOT_PROVEN",
+      "verdict": "deferred",
+      "reason": "Current free-tier Redis environment is a single standalone node without Sentinel or Redis Cluster failover semantics.",
+      "future_target": "Validate failover and reconnection against multi-node/HA Redis deployment."
+    },
+    "production_scale_capacity": {
+      "status": "NOT_BENCHMARKED",
+      "verdict": "deferred",
+      "reason": "Free-tier environment has strict throughput/connection limits unsuitable for load testing.",
+      "future_target": "Benchmark sustained concurrency and load on production-provisioned Redis."
+    },
+    "managed_production_backups_recovery": {
+      "status": "NOT_PROVEN",
+      "verdict": "deferred",
+      "reason": "Free-tier Redis instance does not provide managed point-in-time recovery or backup guarantees.",
+      "future_target": "Verify snapshot/RDB/AOF persistence and recovery on managed infrastructure."
+    },
+    "private_production_networking": {
+      "status": "NOT_PROVEN",
+      "verdict": "deferred",
+      "reason": "Current free-tier Redis is hosted on public endpoint with authentication; VPC peering / private networking is not present in free tier.",
+      "future_target": "Validate VPC peering / private Link / internal subnet connectivity."
+    }
+  },
+  "modular_production_path": {
+    "current_configuration": {
+      "QUEUE_BACKEND": "redis",
+      "REDIS_URL": "redis://default:***@treatment-fuel-wool-75256.db.redis.io:13859"
+    },
+    "future_tls_configuration": {
+      "QUEUE_BACKEND": "redis",
+      "REDIS_URL": "rediss://default:***@staging-redis.internal:6379/1"
+    },
+    "architecture_invariance": "Transition between unencrypted free-tier Redis and future TLS-capable Redis is 100% configuration-driven via REDIS_URL. No business logic, queue semantics, checkpoint semantics, or adapter architecture changes are required.",
+    "engineering_conclusion": "Redis functional behavior is proven against real Redis; infrastructure capabilities unavailable in the current free-tier environment remain deferred/unproven and are preserved as future validation targets."
+  }
 }

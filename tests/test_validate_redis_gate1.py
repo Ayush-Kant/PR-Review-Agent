@@ -145,6 +145,52 @@ class TestRedisGate1Validator(unittest.TestCase):
         self.assertTrue(self.evidence_path.exists())
         saved_data = json.loads(self.evidence_path.read_text(encoding="utf-8"))
         self.assertEqual(saved_data["overall_status"], "offline_verified")
+        self.assertIn("capabilities", saved_data)
+        self.assertIn("environmental_context", saved_data)
+
+    def test_capabilities_distinction(self) -> None:
+        """Verify that offline execution distinguishes offline verification from live proof,
+
+        and correctly reports deferred/unproven infrastructure capabilities.
+        """
+        validator = RedisGate1Validator(
+            client=self.client,
+            allow_insecure=True,
+            require_staging_isolation=False,
+            evidence_path=self.evidence_path,
+        )
+        report = validator.validate_all()
+        self.assertIsNotNone(report.capabilities)
+        caps = report.capabilities or {}
+
+        # 5 functional capabilities verified offline
+        for func_cap in (
+            "redis_functional_semantics",
+            "redis_native_lua_execution",
+            "redis_checkpoint_semantics",
+            "redis_arq_serialization_compatibility",
+            "redis_secret_handling",
+        ):
+            self.assertIn(func_cap, caps)
+            self.assertEqual(caps[func_cap]["status"], "OFFLINE_VERIFIED")
+            self.assertEqual(caps[func_cap]["verdict"], "pass")
+            # Offline mock must NEVER claim PROVEN live status
+            self.assertNotEqual(caps[func_cap]["status"], "PROVEN")
+
+        # 5 infrastructure capabilities deferred
+        for infra_cap in (
+            "redis_tls_transport",
+            "redis_ha_failover",
+            "managed_production_backups_recovery",
+            "private_production_networking",
+        ):
+            self.assertIn(infra_cap, caps)
+            self.assertEqual(caps[infra_cap]["status"], "NOT_PROVEN")
+            self.assertEqual(caps[infra_cap]["verdict"], "deferred")
+
+        self.assertEqual(caps["production_scale_capacity"]["status"], "NOT_BENCHMARKED")
+        self.assertEqual(caps["production_scale_capacity"]["verdict"], "deferred")
+
 
     def test_lua_failure_handling(self) -> None:
         """Verify that Lua script failure is caught and reported rather than falling back silently."""

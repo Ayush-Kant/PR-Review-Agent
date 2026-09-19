@@ -1,0 +1,231 @@
+{
+  "task": "production-infrastructure-cutover",
+  "gate": "gate-2-real-tiger-validation",
+  "overall_status": "offline_verified",
+  "live_tiger_executed": false,
+  "timestamp": "2026-09-19T10:27:20.604731+00:00",
+  "repository": "Ayush-Kant/PR-Review-Agent",
+  "branch": "agent-v1",
+  "commit_sha": "d5bf97252656ec7d3645475fb367cc927dd36dd3",
+  "tiger_metadata": {
+    "scheme": "unknown",
+    "host": "unknown",
+    "port": 0,
+    "database": "unknown",
+    "sslmode": "unknown",
+    "authenticated": false,
+    "masked_url": ""
+  },
+  "server_version": null,
+  "checks": {
+    "ssl_enforcement": {
+      "name": "ssl_enforcement",
+      "status": "passed",
+      "duration_ms": 0.018300001102034003,
+      "details": {
+        "ssl_mode": "require",
+        "ssl_enforced": true
+      },
+      "error": null
+    },
+    "health_check": {
+      "name": "health_check",
+      "status": "passed",
+      "duration_ms": 0.07170000026235357,
+      "details": {
+        "healthy": true
+      },
+      "error": null
+    },
+    "connection_lifecycle": {
+      "name": "connection_lifecycle",
+      "status": "passed",
+      "duration_ms": 0.00799999907030724,
+      "details": {
+        "connection_reused": true,
+        "protocol_verified": true
+      },
+      "error": null
+    },
+    "transaction_control": {
+      "name": "transaction_control",
+      "status": "passed",
+      "duration_ms": 2.416500001345412,
+      "details": {
+        "rollback_verified": true,
+        "commit_verified": true
+      },
+      "error": null
+    },
+    "pgvector_capability": {
+      "name": "pgvector_capability",
+      "status": "passed",
+      "duration_ms": 0.13179999950807542,
+      "details": {
+        "has_vector": true,
+        "vector_available": true,
+        "has_timescaledb": false,
+        "installed_extensions": [
+          "pgcrypto",
+          "uuid-ossp",
+          "vector"
+        ]
+      },
+      "error": null
+    },
+    "migration_checksum_and_idempotency": {
+      "name": "migration_checksum_and_idempotency",
+      "status": "passed",
+      "duration_ms": 13.282599999001832,
+      "details": {
+        "discovered_versions": [
+          1,
+          2
+        ],
+        "checksums_verified": true,
+        "first_run_applied_count": 0,
+        "idempotency_verified": true
+      },
+      "error": null
+    },
+    "review_truth_lifecycle": {
+      "name": "review_truth_lifecycle",
+      "status": "passed",
+      "duration_ms": 5.715299999792478,
+      "details": {
+        "run_registered": true,
+        "initial_recorded": true,
+        "transition_verified": true,
+        "illegal_transition_rejected": true,
+        "history_verified": true
+      },
+      "error": null
+    },
+    "audit_chronology": {
+      "name": "audit_chronology",
+      "status": "passed",
+      "duration_ms": 4.435299999386189,
+      "details": {
+        "events_recorded": [
+          1,
+          2
+        ],
+        "chronology_verified": true,
+        "reconstruction_verified": true
+      },
+      "error": null
+    },
+    "code_memory_freshness": {
+      "name": "code_memory_freshness",
+      "status": "passed",
+      "duration_ms": 7.376000001386274,
+      "details": {
+        "chunks_indexed_rev1": 1,
+        "rev1_fresh": true,
+        "retrieved_chunk_count": 1,
+        "supersede_verified": true
+      },
+      "error": null
+    },
+    "effect_store_idempotency": {
+      "name": "effect_store_idempotency",
+      "status": "passed",
+      "duration_ms": 1.963400000022375,
+      "details": {
+        "initial_recorded": true,
+        "retrieval_verified": true,
+        "idempotency_verified": true
+      },
+      "error": null
+    },
+    "stale_sha_rejection": {
+      "name": "stale_sha_rejection",
+      "status": "passed",
+      "duration_ms": 0.09949999912350904,
+      "details": {
+        "rev1_is_fresh": false,
+        "stale_sha_safely_rejected": true
+      },
+      "error": null
+    },
+    "secret_redaction": {
+      "name": "secret_redaction",
+      "status": "passed",
+      "duration_ms": 0.7041000008030096,
+      "details": {
+        "masked_url_clean": true,
+        "repr_clean": true
+      },
+      "error": null
+    },
+    "cleanup": {
+      "name": "cleanup",
+      "status": "passed",
+      "duration_ms": 1.0961999996652594,
+      "details": {
+        "records_cleaned": 9,
+        "clean_completed": true
+      },
+      "error": null
+    }
+  },
+  "evidence_path": ".genesis\\evidence\\w1_08b_tiger_validation.json",
+  "failure_details": null,
+  "capabilities": {
+    "tiger_postgres_functional_semantics": {
+      "status": "OFFLINE_VERIFIED",
+      "verdict": "pass",
+      "evidence": "Tiger data adapters verified in offline harness; not proven against live infrastructure."
+    },
+    "tiger_ssl_transport": {
+      "status": "OFFLINE_VERIFIED",
+      "verdict": "pass",
+      "evidence": "SSL enforcement rules verified offline."
+    },
+    "tiger_pgvector_extension": {
+      "status": "OFFLINE_VERIFIED",
+      "verdict": "pass",
+      "evidence": "pgvector capability inspection logic verified in offline mock."
+    },
+    "tiger_schema_migrations": {
+      "status": "OFFLINE_VERIFIED",
+      "verdict": "pass",
+      "evidence": "Migration checksums and idempotency verified in offline simulation."
+    },
+    "tiger_secret_redaction": {
+      "status": "OFFLINE_VERIFIED",
+      "verdict": "pass",
+      "evidence": "Secret redaction verified in offline harness."
+    },
+    "tiger_ha_failover": {
+      "status": "NOT_PROVEN",
+      "verdict": "deferred",
+      "reason": "Multi-zone HA and automated failover verification deferred to managed infrastructure validation.",
+      "future_target": "Multi-zone PostgreSQL high-availability configuration"
+    },
+    "tiger_managed_backups_recovery": {
+      "status": "NOT_PROVEN",
+      "verdict": "deferred",
+      "reason": "Automated WAL archiving, continuous backups, and PITR restoration deferred to managed infrastructure validation.",
+      "future_target": "Automated WAL/PITR recovery verification on managed cloud database"
+    },
+    "tiger_private_networking": {
+      "status": "NOT_PROVEN",
+      "verdict": "deferred",
+      "reason": "VPC peering / private connection isolation deferred to managed infrastructure validation.",
+      "future_target": "VPC peering / AWS PrivateLink / GCP PSC isolation"
+    }
+  },
+  "environmental_context": "Deterministic offline simulation for harness and validator logic proof only; not live Tiger proof.",
+  "modular_production_path": {
+    "current_configuration": {
+      "DATABASE_BACKEND": "sqlite",
+      "DATABASE_PATH": "pr_review_agent.db"
+    },
+    "future_tiger_configuration": {
+      "DATABASE_BACKEND": "tiger",
+      "TIGER_DATABASE_URL": "postgresql://user:***@host:5432/pr_review_agent?sslmode=require"
+    },
+    "architecture_invariance": "Transition from local SQLite reference to Tiger Cloud is configuration-driven via DATABASE_BACKEND and TIGER_DATABASE_URL without changing domain or business logic."
+  }
+}
